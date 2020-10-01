@@ -2,6 +2,7 @@ package microui
 
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 
 val UNCLIPPED_RECT = Rect(0, 0, 0x1000000, 0x1000000)
 
@@ -73,14 +74,12 @@ fun drawRect(context: Context, rect: Rect, color: Color) {
         TODO("Not yet implemented")
 }
 
-
 fun initContext(): Context {
         return Context(
                 drawFrame = ::drawFrame,
                 style = defaultStyle
         )
 }
-
 
 fun begin(context: Context) {
         requireNotNull(context.textWidth)
@@ -91,4 +90,44 @@ fun begin(context: Context) {
         context.mouseDelta.x = context.mousePos.x - context.lastMousePos.x
         context.mouseDelta.y = context.mousePos.y - context.lastMousePos.y
         context.frame++
+}
+
+fun setFocus(context: Context, id: Id) {
+        context.focus = id
+        context.updatedFocus = 1
+}
+const val HASH_INITIAL = 2166136261U;
+
+fun <T> hash(hash: Id, data: Array<T>, size: Int): Id {
+        var result = hash.hashCode().toDouble()
+        data.forEach { result = (result.toDouble().pow(it.hashCode().toDouble()) * 16777619) }
+        return  result.toUInt()
+}
+
+fun <T> getId(context: Context, data: Array<T>, size: Int): Id {
+        var res = context.idStack.lastOrNull() ?: HASH_INITIAL
+        res = hash(res, data, size)
+        context.lastId = res
+        return res
+}
+
+fun <T> pushId(context: Context, data: Array<T>, size: Int) {
+        context.idStack.addLast(getId(context, data, size))
+}
+
+fun popId(context: Context) {
+        context.idStack.removeLast()
+}
+
+fun pushClipRect(context: Context, rect: Rect) {
+        val last: Rect = getClipRect(context);
+        context.clipStack.addLast(intersectRects(rect, last))
+}
+
+fun getClipRect(context: Context): Rect {
+        return context.clipStack.last()
+}
+
+fun popClipRect(context: Context) {
+        context.clipStack.removeLast()
 }
