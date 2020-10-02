@@ -8,38 +8,39 @@ typealias Font = voidp
 class Vec2(var x: Int, var y: Int)
 class Rect(val x: Int, val y: Int, val w: Int, val h: Int)
 class Color(val r: UByte, val g: UByte, val b: UByte, val a: UByte)
-class PoolItem(val id: Id, val lastUpdate: Int)
+class PoolItem(var id: Id, var lastUpdate: Int)
 
-class BaseCommand(val type: Command, val size: Int)
-class JumpCommand(val base: BaseCommand, val dst: voidp)
-class ClipCommand(val base: BaseCommand, val rect: Rect, )
-class RectCommand(val base: BaseCommand, val rect: Rect, val color: Color)
-class TextCommand(val base: BaseCommand, val font: voidp, val pos: Vec2, val color: Color, val char: Char)
-class IconCommand(val base: BaseCommand, val rect: Rect, val id: Int, val color: Color)
+sealed class Command(val size: Int) {
+    class JumpCommand(size: Int, val dst: voidp): Command(size)
+    class ClipCommand(size: Int, val rect: Rect): Command(size)
+    class RectCommand(size: Int, val rect: Rect, val color: Color): Command(size)
+    class TextCommand(size: Int, val font: voidp, val pos: Vec2, val color: Color, val char: Char): Command(size)
+    class IconCommand(size: Int, val rect: Rect, val id: Int, val color: Color): Command(size)
+}
 
 class Layout(
     val body: Rect,
-    val next: Rect,
-    val position: Vec2,
-    val size: Vec2,
-    val max: Vec2,
-    val widths: Array<Int>,
-    val items: Int,
-    val item_index: Int,
-    val next_row: Int,
-    val next_type: Int,
-    val indent: Int
+    val next: Rect? = null,
+    val position: Vec2? = null,
+    val size: Vec2? = null,
+    val max: Vec2? = null,
+    val widths: Array<Int> = emptyArray(),
+    val items: Int? = null,
+    val itemIndex: Int? = null,
+    val nextRow: Int? = null,
+    val nextType: Int? = null,
+    val indent: Int? = null
 )
 
 class Container(
-    val head: Command,
-    val tail: Command,
-    val rect: Rect,
-    val body: Rect,
-    val contentSize: Vec2,
-    val scroll: Vec2,
-    val zIndex: Int,
-    val open: Int
+        val head: Command,
+        val tail: Command,
+        val rect: Rect,
+        val body: Rect,
+        val contentSize: Vec2,
+        val scroll: Vec2,
+        var zIndex: Int,
+        var open: Int
 )
 
 class Style(
@@ -65,7 +66,7 @@ class Context (
     var focus: Id = 0U,
     var lastId: Id = 0U,
     val lastRect: Rect = UNCLIPPED_RECT,
-    val lastZIndex: Int = 0,
+    var lastZIndex: Int = 0,
     var updatedFocus: Int = 0,
     var frame: Int = 0,
     var hoverRoot: Container? = null,
@@ -85,13 +86,13 @@ class Context (
     val containers: Array<Container>? = null,
     val treeNodePool: Array<PoolItem>? = null,
     /* input state */
-    val mousePos: Vec2 = Vec2(0, 0),
-    val lastMousePos: Vec2 = Vec2(0, 0),
+    var mousePos: Vec2 = Vec2(0, 0),
+    var lastMousePos: Vec2 = Vec2(0, 0),
     val mouseDelta: Vec2 = Vec2(0, 0),
-    val scrollDelta: Vec2 = Vec2(0, 0),
-    val mouseDown: Int = 0,
-    val mousePressed: Int = 0,
-    val keyDown: Int = 0,
-    val keyPressed: Int = 0,
-    val inputText: String = ""
+    var scrollDelta: Vec2 = Vec2(0, 0),
+    var mouseDown: Boolean = false,
+    var mousePressed: Boolean = false,
+    var keyDown: Int = 0,
+    var keyPressed: Int = 0,
+    var inputText: String = ""
 )

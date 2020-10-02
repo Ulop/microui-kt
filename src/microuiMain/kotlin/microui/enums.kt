@@ -1,14 +1,6 @@
 package microui
 
-enum class Clip { PART, ALL }
-enum class Command{
-    JUMP,
-    CLIP,
-    RECT,
-    TEXT,
-    ICON,
-    MAX
-}
+enum class Clip { PART, ALL, NONE }
 
 enum class Colors {
     TEXT,
@@ -43,6 +35,7 @@ enum class Res(val value: Int){
 }
 
 enum class Opt(val value: Int){
+    NONE          (0),
     ALIGN_CENTER  (1 shl 0),
     ALIGN_RIGHT   (1 shl 1),
     NO_INTERACT   (1 shl 2),
