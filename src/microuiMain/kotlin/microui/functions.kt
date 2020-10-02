@@ -516,3 +516,51 @@ fun layoutNext(context: Context): Rect {
     context.lastRect = res
     return res
 }
+
+/*============================================================================
+** controls
+**============================================================================*/
+
+fun inHoverRoot(context: Context): Boolean {
+    var i = context.containerStack.size
+    while (i-- != 0) {
+        if (context.containerStack[i] == context.hoverRoot) {
+            return true
+        }
+        /* only root containers have their `head` field set; stop searching if we've
+        ** reached the current root container */
+        if (context.containerStack[i].head != null) {
+            break
+        }
+    }
+    return false
+}
+
+fun drawControlFrame(context: Context, id: Id, rect: Rect, color: Colors, opt: Opt) {
+    var colorId = color.ordinal
+    if (opt == Opt.NO_FRAME) {
+        return; }
+    colorId += if (context.focus == id) 2 else if (context.hover == id) 1 else 0
+    context.drawFrame(context, rect, Colors.values()[colorId])
+}
+
+
+fun drawControlText(context: Context, str: String, rect: Rect, color: Colors, opt: Opt) {
+    val font = context.style.font
+    val tw = context.textWidth(font!!, str)
+    pushClipRect(context, rect)
+    val posY = rect.y + (rect.h - context.textHeight(font)) / 2
+    val posX = when (opt) {
+        Opt.ALIGN_CENTER -> rect.x + (rect.w - tw) / 2
+        Opt.ALIGN_RIGHT -> rect.x + rect.w - tw - context.style.padding
+        else -> rect.x + context.style.padding
+    }
+    drawText(context, font, str, Vec2(posX, posY), context.style.colors[opt.ordinal])
+    popClipRect(context)
+}
+
+fun mouseOver(context: Context, rect: Rect): Boolean {
+    return (rectOverlapsVec2(rect, context.mousePos)
+            && rectOverlapsVec2(getClipRect(context), context.mousePos)
+            && inHoverRoot(context))
+}

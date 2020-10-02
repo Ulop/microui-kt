@@ -32,7 +32,7 @@ class Layout(
 )
 
 class Container(
-        val head: Command,
+        val head: Command? = null,
         val tail: Command,
         val rect: Rect,
         val body: Rect,
@@ -58,7 +58,7 @@ class Context(
         /* callbacks */
         var textWidth: (font: Font, text: String) -> Int = { _, _ -> 0 },
         var textHeight: ((font: Font) -> Int) = { _ -> 0 },
-        val drawFrame: ((ctx: Context, rect: Rect, color: Colors) -> Unit)? = null,
+        var drawFrame: ((ctx: Context, rect: Rect, color: Colors) -> Unit) = { _, _, _ -> },
         /* core state */
         val style: Style,
         val hover: Id = 0U,
