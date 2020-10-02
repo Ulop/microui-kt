@@ -395,9 +395,9 @@ fun drawText(context: Context, font: Font, text: String, pos: Vec2, color: Color
 
 fun drawIcon(context: Context, id: Int, rect: Rect, color: Color) {
     /* do clip command if the rect isn't fully contained within the cliprect */
-    val clipped = checkClip (context, rect)
+    val clipped = checkClip(context, rect)
     if (clipped == Clip.ALL) {
-        return;
+        return
     }
     if (clipped == Clip.PART) {
         setClip(context, getClipRect(context))
@@ -408,4 +408,111 @@ fun drawIcon(context: Context, id: Int, rect: Rect, color: Color) {
     if (clipped != Clip.NONE) {
         setClip(context, UNCLIPPED_RECT)
     }
+}
+
+/*============================================================================
+** layout
+**============================================================================*/
+
+fun layoutBeginColumn(context: Context) {
+    pushLayout(context, layoutNext(context), Vec2(0, 0))
+}
+
+
+fun layoutEndColumn(context: Context) {
+    val b = getLayout(context)
+    context.layoutStack.removeLast()
+    /* inherit position/next_row/max from child layout if they are greater */
+    val a = getLayout(context)
+    requireNotNull(a.position)
+    requireNotNull(b.position)
+
+    a.position?.x = max(a.position?.x ?: 0, b.position?.x ?: 0 + b.body.x - a.body.x)
+    a.nextRow = max(a.nextRow ?: 0, b.nextRow ?: 0 + b.body.y - a.body.y)
+    a.max?.x = max(a.max?.x ?: 0, b.max?.x ?: 0)
+    a.max?.y = max(a.max?.y ?: 0, b.max?.y ?: 0)
+}
+
+
+fun layoutRow(context: Context, widths: IntArray, height: Int) {
+    val layout = getLayout(context)
+    if (widths.isNotEmpty()) {
+        require(widths.size <= MAX_WIDTHS)
+        layout.widths = widths
+    }
+    layout.position = Vec2(layout.indent ?: 0, layout.nextRow ?: 0)
+    layout.size?.y = height
+    layout.itemIndex = 0
+}
+
+fun layoutWidth(context: Context, width: Int) {
+    getLayout(context).size?.x = width
+}
+
+fun layoutHeight(context: Context, height: Int) {
+    getLayout(context).size?.x = height
+}
+
+fun layoutSetNext(context: Context, rect: Rect, isRelative: Boolean) {
+    val layout = getLayout(context)
+    layout.next = rect
+    layout.nextType = if (isRelative) LayoutType.RELATIVE else LayoutType.ABSOLUTE
+}
+
+fun layoutNext(context: Context): Rect {
+    val layout = getLayout(context)
+    val style = context.style
+    val res: Rect?
+
+    val position = layout.position
+    if (layout.nextType != null) {
+        /* handle rect set by `mu_layout_set_next` */
+        val type = layout.nextType
+        layout.nextType = LayoutType.NONE
+        res = layout.next!!
+        if (type == LayoutType.ABSOLUTE) {
+            context.lastRect = res
+            return res
+        }
+    } else {
+        /* handle next row */
+        if (layout.itemIndex == layout.widths.size) {
+            layoutRow(context, intArrayOf(), layout.size?.y ?: 0)
+        }
+
+        res = Rect(
+                position?.x ?: 0,
+                position?.y ?: 0,
+                if (layout.widths.isNotEmpty()) layout.widths.last() else layout.size?.x ?: 0,
+                layout.size?.y ?: 0
+        )
+        if (res.w == 0) {
+            res.w = style.size.x + style.padding * 2
+        }
+        if (res.h == 0) {
+            res.h = style.size.y + style.padding * 2
+        }
+        if (res.w < 0) {
+            res.w += layout.body.w - res.x + 1; }
+        if (res.h < 0) {
+            res.h += layout.body.h - res.y + 1; }
+
+        layout.itemIndex?.inc()
+    }
+
+    /* update position */
+    if (position != null)
+        position.x += res.w + style.spacing
+    layout.nextRow = max(layout.nextRow ?: 0, res.y + res.h + style.spacing)
+
+    /* apply body offset */
+    res.x += layout.body.x
+    res.y += layout.body.y
+
+    /* update max position */
+    layout.max?.x = max(layout.max?.x ?: 0, res.x + res.w)
+    layout.max?.y = max(layout.max?.y ?: 0, res.y + res.h)
+
+    context.lastRect = res
+    return res
 }

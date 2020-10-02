@@ -54,13 +54,15 @@ enum class Opt(val value: Int){
 enum class Mouse(val value: Int) {
     LEFT       (1 shl 0),
     RIGHT      (1 shl 1),
-    MIDDLE     (1 shl 2)
+    MIDDLE(1 shl 2)
 }
 
-enum class Key(val value: Int){
-    SHIFT        (1 shl 0),
-    CTRL         (1 shl 1),
-    ALT          (1 shl 2),
-    BACKSPACE    (1 shl 3),
-    RETURN       (1 shl 4)
+enum class Key(val value: Int) {
+    SHIFT(1 shl 0),
+    CTRL(1 shl 1),
+    ALT(1 shl 2),
+    BACKSPACE(1 shl 3),
+    RETURN(1 shl 4)
 }
+
+enum class LayoutType { NONE, RELATIVE, ABSOLUTE }
