@@ -1,5 +1,6 @@
 package microui
 
+import platform.windows.ssfFONTS
 import platform.zlib.voidp
 
 typealias Id = UInt
@@ -10,12 +11,12 @@ class Rect(val x: Int, val y: Int, val w: Int, val h: Int)
 class Color(val r: UByte, val g: UByte, val b: UByte, val a: UByte)
 class PoolItem(var id: Id, var lastUpdate: Int)
 
-sealed class Command(val size: Int) {
-    class JumpCommand(size: Int, val dst: voidp): Command(size)
-    class ClipCommand(size: Int, val rect: Rect): Command(size)
-    class RectCommand(size: Int, val rect: Rect, val color: Color): Command(size)
-    class TextCommand(size: Int, val font: voidp, val pos: Vec2, val color: Color, val char: Char): Command(size)
-    class IconCommand(size: Int, val rect: Rect, val id: Int, val color: Color): Command(size)
+sealed class Command {
+    class JumpCommand(val dst: Command): Command()
+    class ClipCommand(val rect: Rect): Command()
+    class RectCommand(val rect: Rect, val color: Color): Command()
+    class TextCommand(val font: voidp, val pos: Vec2, val color: Color, val char: Char): Command()
+    class IconCommand(val rect: Rect, val id: Int, val color: Color): Command()
 }
 
 class Layout(
@@ -57,8 +58,8 @@ class Style(
 
 class Context (
     /* callbacks */
-    val textWidth: ((font: Font, text: String) -> Int)? = null,
-    val textHeight: ((font: Font) -> Int)? = null,
+    var textWidth: (font: Font, text: String) -> Int =  { _, _ -> 0 },
+    var textHeight: ((font: Font) -> Int) = { _ -> 0},
     val drawFrame: ((ctx: Context, rect: Rect, color: Colors) -> Unit)? = null,
     /* core state */
     val style: Style,

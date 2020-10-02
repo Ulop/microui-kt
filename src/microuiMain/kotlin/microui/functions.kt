@@ -67,14 +67,6 @@ fun drawFrame(context: Context, rect: Rect, color: Colors) {
     }
 }
 
-fun drawBox(context: Context, expandRect: Rect, color: Color) {
-    TODO("Not yet implemented")
-}
-
-fun drawRect(context: Context, rect: Rect, color: Color) {
-    TODO("Not yet implemented")
-}
-
 fun initContext(): Context {
     return Context(
             drawFrame = ::drawFrame,
@@ -249,7 +241,9 @@ fun getContainer(context: Context, id: Id, opt: Opt): Container? {
         }
         return context.containers?.get(idx)
     }
-    if (opt == Opt.CLOSED) { return null }
+    if (opt == Opt.CLOSED) {
+        return null
+    }
 
     /* container not found in pool: init new container */
     idx = initPool(context, context.containerPool, CONTAINER_POOL_SIZE, id)
@@ -268,7 +262,7 @@ fun getContainer(context: Context, name: String) =
 **============================================================================*/
 
 fun initPool(context: Context, items: Array<PoolItem>, length: Int, id: Id): Int {
-    var n = -1;
+    var n = -1
     var f = context.frame
     for (i in 0..length) {
         if (items[i].lastUpdate < f) {
@@ -300,8 +294,8 @@ fun inputMouseMove(context: Context, x: Int, y: Int) {
 
 fun inputMouseDown(context: Context, x: Int, y: Int, button: Boolean) {
     inputMouseMove(context, x, y)
-    context.mouseDown = context.mouseDown or button;
-    context.mousePressed = context.mousePressed or button;
+    context.mouseDown = context.mouseDown or button
+    context.mousePressed = context.mousePressed or button
 }
 
 
@@ -312,19 +306,106 @@ fun inputMouseUp(context: Context, x: Int, y: Int, button: Boolean) {
 
 
 fun inputScroll(context: Context, x: Int, y: Int) {
-    context.scrollDelta.x += x;
-    context.scrollDelta.y += y;
+    context.scrollDelta.x += x
+    context.scrollDelta.y += y
 }
 
 fun inputKeyDown(context: Context, key: Key) {
-    context.keyPressed = context.keyPressed or key.value;
-    context.keyDown = context.keyDown or key.value;
+    context.keyPressed = context.keyPressed or key.value
+    context.keyDown = context.keyDown or key.value
 }
 
 fun inputKeyUp(context: Context, key: Key) {
-    context.keyDown = context.keyDown and  key.value.inv();
+    context.keyDown = context.keyDown and key.value.inv()
 }
 
 fun inputText(context: Context, text: String) {
     context.inputText = text
+}
+
+/*============================================================================
+** commandlist
+**============================================================================*/
+
+fun pushCommand(context: Context, cmd: Command): Command {
+    require(context.commandList.size < COMMAND_LIST_SIZE)
+    context.commandList.addLast(cmd)
+    return cmd
+}
+
+
+fun nextCommand(context: Context, cmd: Command): Int {
+    val commands = context.commandList
+    for (command in commands) {
+        if (command is Command.JumpCommand) return 1
+    }
+    return 0
+}
+
+
+fun pushJump(context: Context, dst: Command): Command {
+    val cmd = pushCommand(context, Command.JumpCommand(dst))
+    return cmd
+}
+
+
+fun setClip(context: Context, rect: Rect) {
+    pushCommand(context, Command.ClipCommand(rect))
+}
+
+
+fun drawRect(context: Context, rect: Rect, color: Color) {
+    val intersectRect = intersectRects(rect, getClipRect(context))
+    if (intersectRect.w > 0 && intersectRect.h > 0) {
+        pushCommand(context, Command.RectCommand(intersectRect, color))
+    }
+}
+
+fun drawBox(context: Context, rect: Rect, color: Color) {
+    drawRect(context, Rect(rect.x + 1, rect.y, rect.w - 2, 1), color)
+    drawRect(context, Rect(rect.x + 1, rect.y + rect.h - 1, rect.w - 2, 1), color)
+    drawRect(context, Rect(rect.x, rect.y, 1, rect.h), color)
+    drawRect(context, Rect(rect.x + rect.w - 1, rect.y, 1, rect.h), color)
+}
+
+fun drawText(context: Context, font: Font, text: String, pos: Vec2, color: Color) {
+    val rect = Rect(
+            pos.x,
+            pos.y,
+            context.textWidth(font, text),
+            context.textHeight(font)
+    )
+
+    val clipped = checkClip(context, rect)
+    if (clipped == Clip.ALL) {
+        return
+    }
+    if (clipped == Clip.PART) {
+        setClip(context, getClipRect(context))
+    }
+    /* add command */
+    pushCommand(context, Command.TextCommand(font, pos, color, '0'))
+
+    /* reset clipping if it was set */
+    if (clipped != Clip.NONE) {
+        setClip(context, UNCLIPPED_RECT)
+    }
+}
+
+
+fun drawIcon(context: Context, id: Int, rect: Rect, color: Color) {
+    /* do clip command if the rect isn't fully contained within the cliprect */
+    val clipped = checkClip (context, rect)
+    if (clipped == Clip.ALL) {
+        return;
+    }
+    if (clipped == Clip.PART) {
+        setClip(context, getClipRect(context))
+    }
+    /* do icon command */
+    pushCommand(context, Command.IconCommand(rect, id, color))
+
+    if (clipped != Clip.NONE) {
+        setClip(context, UNCLIPPED_RECT)
+    }
 }
