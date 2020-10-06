@@ -110,7 +110,7 @@ fun end(context: Context) {
     /* bring hover root to front if mouse was pressed */
     val nextHoverRoot = context.nextHoverRoot
     if (
-            context.mousePressed &&
+            context.mousePressed != Mouse.NONE &&
             nextHoverRoot != null &&
             nextHoverRoot.zIndex < context.lastZIndex &&
             nextHoverRoot.zIndex >= 0
@@ -119,9 +119,9 @@ fun end(context: Context) {
     }
 
     /* reset input state */
-    context.keyPressed = 0
+    context.keyPressed = Key.NONE
     context.inputText = ""
-    context.mousePressed = false
+    context.mousePressed = Mouse.NONE
     context.scrollDelta = Vec2(0, 0)
     context.lastMousePos = context.mousePos
 
@@ -166,15 +166,15 @@ fun hash(hash: Id, data: String, size: Int): Id {
     return result.toUInt()
 }
 
-fun getId(context: Context, data: String, size: Int): Id {
+fun getId(context: Context, data: String): Id {
     var res = context.idStack.lastOrNull() ?: HASH_INITIAL
-    res = hash(res, data, size)
+    res = hash(res, data, data.length)
     context.lastId = res
     return res
 }
 
-fun <T> pushId(context: Context, data: String, size: Int) {
-    context.idStack.addLast(getId(context, data, size))
+fun <T> pushId(context: Context, data: String) {
+    context.idStack.addLast(getId(context, data))
 }
 
 fun popId(context: Context) {
@@ -255,7 +255,7 @@ fun getContainer(context: Context, id: Id, opt: Opt): Container? {
 }
 
 fun getContainer(context: Context, name: String) =
-        getContainer(context, getId(context, name, name.length), Opt.NONE)
+        getContainer(context, getId(context, name), Opt.NONE)
 
 /*============================================================================
 ** pool
@@ -292,16 +292,16 @@ fun inputMouseMove(context: Context, x: Int, y: Int) {
 }
 
 
-fun inputMouseDown(context: Context, x: Int, y: Int, button: Boolean) {
+fun inputMouseDown(context: Context, x: Int, y: Int, button: Mouse) {
     inputMouseMove(context, x, y)
-    context.mouseDown = context.mouseDown or button
-    context.mousePressed = context.mousePressed or button
+    context.mouseDown = Mouse.values()[context.mouseDown.value or button.value]
+    context.mousePressed = Mouse.values()[context.mousePressed.value or button.value]
 }
 
 
-fun inputMouseUp(context: Context, x: Int, y: Int, button: Boolean) {
+fun inputMouseUp(context: Context, x: Int, y: Int, button: Mouse) {
     inputMouseMove(context, x, y)
-    context.mouseDown = context.mouseDown and !button
+    context.mouseDown = Mouse.values()[context.mouseDown.value and button.value.inv()]
 }
 
 
@@ -311,12 +311,12 @@ fun inputScroll(context: Context, x: Int, y: Int) {
 }
 
 fun inputKeyDown(context: Context, key: Key) {
-    context.keyPressed = context.keyPressed or key.value
-    context.keyDown = context.keyDown or key.value
+    context.keyPressed = Key.values()[context.keyPressed.value or key.value]
+    context.keyDown = Key.values()[context.keyDown.value or key.value]
 }
 
 fun inputKeyUp(context: Context, key: Key) {
-    context.keyDown = context.keyDown and key.value.inv()
+    context.keyDown = Key.values()[context.keyDown.value and key.value.inv()]
 }
 
 fun inputText(context: Context, text: String) {
@@ -393,7 +393,7 @@ fun drawText(context: Context, font: Font, text: String, pos: Vec2, color: Color
 }
 
 
-fun drawIcon(context: Context, id: Int, rect: Rect, color: Color) {
+fun drawIcon(context: Context, id: Icon, rect: Rect, color: Color) {
     /* do clip command if the rect isn't fully contained within the cliprect */
     val clipped = checkClip(context, rect)
     if (clipped == Clip.ALL) {
@@ -555,7 +555,7 @@ fun drawControlText(context: Context, str: String, rect: Rect, color: Colors, op
         Opt.ALIGN_RIGHT -> rect.x + rect.w - tw - context.style.padding
         else -> rect.x + context.style.padding
     }
-    drawText(context, font, str, Vec2(posX, posY), context.style.colors[opt.ordinal])
+    drawText(context, font, str, Vec2(posX, posY), context.style.colors[color.ordinal])
     popClipRect(context)
 }
 
@@ -563,4 +563,166 @@ fun mouseOver(context: Context, rect: Rect): Boolean {
     return (rectOverlapsVec2(rect, context.mousePos)
             && rectOverlapsVec2(getClipRect(context), context.mousePos)
             && inHoverRoot(context))
+}
+
+fun updateControl(context: Context, id: Id, rect: Rect, opt: Opt) {
+    val mouseOver = mouseOver(context, rect)
+
+    if (context.focus == id) {
+        context.updatedFocus = 1
+    }
+    if (opt == Opt.NO_INTERACT) {
+        return
+    }
+    if (mouseOver && context.mouseDown == Mouse.NONE) {
+        context.hover = id
+    }
+
+    if (context.focus == id) {
+        if (context.mousePressed != Mouse.NONE && !mouseOver) {
+            setFocus(context, 0U)
+        }
+        if (context.mouseDown == Mouse.NONE && opt.value.inv() == Opt.HOLD_FOCUS.value) {
+            setFocus(context, 0U)
+        }
+    }
+
+    if (context.hover == id) {
+        if (context.mousePressed != Mouse.NONE) {
+            setFocus(context, id)
+        } else if (!mouseOver) {
+            context.hover = 0U
+        }
+    }
+}
+
+
+fun text(context: Context, text: String) {
+    var p = text
+    val width = -1
+    val font = context.style.font!!
+    val color = context.style.colors[Colors.TEXT.ordinal]
+    layoutBeginColumn(context)
+    layoutRow(context, intArrayOf(width), context.textHeight(font))
+    do {
+        val r = layoutNext(context)
+        var w = 0
+        val start = p
+        var end = p
+        do {
+            val word = p
+            while (p.firstOrNull() != null && p.first() != ' ' && p.first() != '\n') {
+                p = p.drop(1)
+            }
+            w += context.textWidth(font, word)
+            if (w > r.w && end != start) {
+                break
+            }
+            w += context.textWidth(font, p)
+            end = p.drop(1)
+        } while (end != "\n")
+        drawText(context, font, start, Vec2(r.x, r.y), color)
+        p = end + 1
+    } while (end.isNotEmpty())
+    layoutEndColumn(context)
+}
+
+
+fun label(context: Context, text: String) {
+    drawControlText(context, text, layoutNext(context), Colors.TEXT, Opt.NONE)
+}
+
+
+fun buttonEx(context: Context, label: String, icon: Icon, opt: Opt): Int {
+    var res = 0
+    val id = if (label.isNotEmpty())
+        getId(context, label)
+    else
+        getId(context, icon.name)
+
+    val r = layoutNext(context)
+    updateControl(context, id, r, opt)
+    /* handle click */
+    if (context.mousePressed == Mouse.LEFT && context.focus == id) {
+        res = res or Res.SUBMIT.value
+    }
+    /* draw */
+    drawControlFrame(context, id, r, Colors.BUTTON, opt)
+    if (label.isNotEmpty()) {
+        drawControlText(context, label, r, Colors.TEXT, opt); }
+    if (icon != Icon.NONE) {
+        drawIcon(context, icon, r, context.style.colors[Colors.TEXT.ordinal])
+    }
+    return res
+}
+
+
+fun checkBox(context: Context, label: String, state: String): Int {
+    var res = 0
+    val id = getId(context, state)
+    var r = layoutNext(context)
+    val box = Rect(r.x, r.y, r.h, r.h)
+    updateControl(context, id, r, Opt.NONE)
+    /* handle click */
+    if (context.mousePressed == Mouse.LEFT && context.focus == id) {
+        res = res or Res.CHANGE.value
+        // *state = !* state
+    }
+    /* draw */
+    drawControlFrame(context, id, box, Colors.BASE, Opt.NONE)
+    if (state.isNotEmpty()) {
+        drawIcon(context, Icon.CHECK, box, context.style.colors[Colors.TEXT.ordinal])
+    }
+    r = Rect(r.x + box.w, r.y, r.w - box.w, r.h)
+    drawControlText(context, label, r, Colors.TEXT, Opt.NONE)
+    return res
+}
+
+
+fun textBoxRaw(context: Context, buffer: String, bufferSize: Int, id: Id, rect: Rect, opt: Opt): Int {
+    var buff = buffer
+    var res = 0
+    updateControl(context, id, rect, Opt.values()[opt.value or Opt.HOLD_FOCUS.value])
+
+    if (context.focus == id) {
+        /* handle text input */
+        var len = buffer.length
+        var n = min(bufferSize - len - 1, context.inputText.length)
+        if (n > 0) {
+            len += n
+            // buffer[len] = '\0'
+            res = res or Res.CHANGE.value
+        }
+        /* handle backspace */
+        if (context.keyPressed == Key.BACKSPACE && len > 0) {
+            /* skip utf-8 continuation bytes */
+            buff = buff.drop(1)
+            res = res or Res.CHANGE.value
+        }
+        /* handle return */
+        if (context.keyPressed == Key.RETURN) {
+            setFocus(context, 0U)
+            res = res or Res.SUBMIT.value
+        }
+    }
+
+    /* draw */
+    drawControlFrame(context, id, rect, Colors.BASE, opt)
+    if (context.focus == id) {
+        val color = context.style.colors[Colors.TEXT.ordinal]
+        val font = context.style.font!!
+        val textw = context.textWidth(font, buff)
+        val texth = context.textHeight(font)
+        val ofx = rect.w - context.style.padding - textw - 1
+        val textx = rect.x + min(ofx, context.style.padding)
+        val texty = rect.y + (rect.h - texth) / 2
+        pushClipRect(context, rect)
+        drawText(context, font, buff, Vec2(textx, texty), color)
+        drawRect(context, Rect(textx + textw, texty, 1, texth), color)
+        popClipRect(context)
+    } else {
+        drawControlText(context, buff, rect, Colors.TEXT, opt)
+    }
+
+    return res
 }

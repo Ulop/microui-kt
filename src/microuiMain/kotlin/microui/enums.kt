@@ -21,6 +21,7 @@ enum class Colors {
 }
 
 enum class Icon{
+    NONE,
     CLOSE,
     CHECK,
     COLLAPSED,
@@ -52,12 +53,14 @@ enum class Opt(val value: Int){
 }
 
 enum class Mouse(val value: Int) {
-    LEFT       (1 shl 0),
+    NONE(0),
+    LEFT(1 shl 0),
     RIGHT      (1 shl 1),
     MIDDLE(1 shl 2)
 }
 
 enum class Key(val value: Int) {
+    NONE(0),
     SHIFT(1 shl 0),
     CTRL(1 shl 1),
     ALT(1 shl 2),

@@ -14,8 +14,8 @@ sealed class Command {
     class JumpCommand(val dst: Command): Command()
     class ClipCommand(val rect: Rect): Command()
     class RectCommand(val rect: Rect, val color: Color): Command()
-    class TextCommand(val font: voidp, val pos: Vec2, val color: Color, val char: Char): Command()
-    class IconCommand(val rect: Rect, val id: Int, val color: Color): Command()
+    class TextCommand(val font: voidp, val pos: Vec2, val color: Color, val char: Char) : Command()
+    class IconCommand(val rect: Rect, val id: Icon, val color: Color) : Command()
 }
 
 class Layout(
@@ -61,7 +61,7 @@ class Context(
         var drawFrame: ((ctx: Context, rect: Rect, color: Colors) -> Unit) = { _, _, _ -> },
         /* core state */
         val style: Style,
-        val hover: Id = 0U,
+        var hover: Id = 0U,
         var focus: Id = 0U,
         var lastId: Id = 0U,
         var lastRect: Rect = UNCLIPPED_RECT,
@@ -89,9 +89,9 @@ class Context(
         var lastMousePos: Vec2 = Vec2(0, 0),
         val mouseDelta: Vec2 = Vec2(0, 0),
         var scrollDelta: Vec2 = Vec2(0, 0),
-        var mouseDown: Boolean = false,
-        var mousePressed: Boolean = false,
-        var keyDown: Int = 0,
-        var keyPressed: Int = 0,
+        var mouseDown: Mouse = Mouse.NONE,
+        var mousePressed: Mouse = Mouse.NONE,
+        var keyDown: Key = Key.NONE,
+        var keyPressed: Key = Key.NONE,
         var inputText: String = ""
 )
