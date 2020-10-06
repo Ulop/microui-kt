@@ -11,8 +11,8 @@ class Color(val r: UByte, val g: UByte, val b: UByte, val a: UByte)
 class PoolItem(var id: Id, var lastUpdate: Int)
 
 sealed class Command {
-    class JumpCommand(val dst: Command): Command()
-    class ClipCommand(val rect: Rect): Command()
+    class JumpCommand(var dst: Command?) : Command()
+    class ClipCommand(val rect: Rect) : Command()
     class RectCommand(val rect: Rect, val color: Color): Command()
     class TextCommand(val font: voidp, val pos: Vec2, val color: Color, val char: Char) : Command()
     class IconCommand(val rect: Rect, val id: Icon, val color: Color) : Command()
@@ -32,14 +32,14 @@ class Layout(
 )
 
 class Container(
-        val head: Command? = null,
-        val tail: Command,
-        val rect: Rect,
-        val body: Rect,
-        val contentSize: Vec2,
-        val scroll: Vec2,
-        var zIndex: Int,
-        var open: Int
+    var head: Command? = null,
+    var tail: Command,
+    var rect: Rect,
+    var body: Rect,
+    val contentSize: Vec2,
+    val scroll: Vec2,
+    var zIndex: Int,
+    var open: Boolean = false
 )
 
 class Style(

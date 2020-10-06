@@ -142,7 +142,7 @@ fun end(context: Context) {
         if (i == 0) {
            val cmd = context.commandList
             cmd.first().
-            cmd->jump.dst = (char*) cnt->head+sizeof(mu_JumpCommand)
+            cmd->jump.dst = (char*) container->head+sizeof(mu_JumpCommand)
         } else {
             mu_Container * prev = ctx->root_list.items[i-1]
             prev->tail->jump.dst = (char*) cnt->head+sizeof(mu_JumpCommand)
@@ -178,7 +178,7 @@ fun getId(context: Context, data: String): Id {
     return res
 }
 
-fun <T> pushId(context: Context, data: String) {
+fun pushId(context: Context, data: String) {
     context.idStack.addLast(getId(context, data))
 }
 
@@ -241,7 +241,7 @@ fun getContainer(context: Context, id: Id, opt: Opt): Container? {
     /* try to get existing container from pool */
     var idx = poolGet(context, context.containerPool, id)
     if (idx >= 0) {
-        if (context.containers?.get(idx)?.open != 0 || opt == Opt.CLOSED) {
+        if (context.containers?.get(idx)?.open == true || opt == Opt.CLOSED) {
             poolUpdate(context, context.containerPool, idx)
         }
         return context.containers?.get(idx)
@@ -253,7 +253,7 @@ fun getContainer(context: Context, id: Id, opt: Opt): Container? {
     /* container not found in pool: init new container */
     idx = initPool(context, context.containerPool, CONTAINER_POOL_SIZE, id)
     container = context.containers?.get(idx) ?: return null
-    container.open = 1
+    container.open = true
     bringToFront(context, container)
 
     return container
@@ -348,7 +348,7 @@ fun nextCommand(context: Context, cmd: Command): Int {
 }
 
 
-fun pushJump(context: Context, dst: Command): Command {
+fun pushJump(context: Context, dst: Command?): Command {
     val cmd = pushCommand(context, Command.JumpCommand(dst))
     return cmd
 }
@@ -898,38 +898,223 @@ fun endTreeNode(context: Context) {
     popId(context)
 }
 
-fun scrollbar(context: Context, cnt: Container, b: Rect, cs: Rect, x: Int, y: Int, w: Int, h: Int) {
+fun scrollbar(context: Context, container: Container, b: Rect, cs: Vec2) {
     /* only add scrollbar if content size is larger than body */
     val maxScroll = cs.y - b.h
 
     if (maxScroll > 0 && b.h > 0) {
-        val id = getId(context, "!scrollbar$y")
+        val id = getId(context, "!scrollbar$b")
 
         /* get sizing / positioning */
-        val base = b
-        base.x = b.x + b.w
-        base.w = context.style.scrollbarSize
+        b.x = b.x + b.w
+        b.w = context.style.scrollbarSize
 
         /* handle input */
-        updateControl(context, id, base, 0)
+        updateControl(context, id, b, Opt.NONE)
         if (context.focus == id && context.mouseDown == Mouse.LEFT) {
-            cnt.scroll.y += context.mouseDelta.y * cs.y / base.h
+            container.scroll.y += context.mouseDelta.y * cs.y / b.h
         }
         /* clamp scroll to limits */
-        cnt.scroll.y = clamp(cnt.scroll.y, 0, maxScroll)
+        container.scroll.y = clamp(container.scroll.y, 0, maxScroll)
 
         /* draw base and thumb */
-        context.drawFrame(context, base, Colors.SCROLL_BASE)
-        val thumb = base
-        thumb.h = max(context.style.thumbSize, base.h * b.h / cs.y)
-        thumb.y += cnt.scroll.y * (base.h - thumb.h) / maxScroll
-        context.drawFrame(context, thumb, Colors.SCROLL_THUMB)
+        context.drawFrame(context, b, Colors.SCROLL_BASE)
+        b.h = max(context.style.thumbSize, b.h * b.h / cs.y)
+        b.y += container.scroll.y * (b.h - b.h) / maxScroll
+        context.drawFrame(context, b, Colors.SCROLL_THUMB)
 
         /* set this as the scroll_target (will get scrolled on mousewheel) */
         /* if the mouse is over it */
         if (mouseOver(context, b)) {
-            context.scrollTarget = cnt; }
+            context.scrollTarget = container; }
     } else {
-        cnt.scroll.y = 0
+        container.scroll.y = 0
     }
+}
+
+fun scrollbars(context: Context, container: Container, body: Rect) {
+    val sz = context.style.scrollbarSize
+    val cs = container.contentSize
+    cs.x += context.style.padding * 2
+    cs.y += context.style.padding * 2
+    pushClipRect(context, body)
+    /* resize body to make room for scrollbars */
+    if (cs.y > container.body.h) {
+        body.w -= sz; }
+    if (cs.x > container.body.w) {
+        body.h -= sz; }
+    /* to create a horizontal or vertical scrollbar almost-identical code is
+    ** used; only the references to `x|y` `w|h` need to be switched */
+    scrollbar(context, container, body, cs)
+    scrollbar(context, container, Rect(body.y, body.x, body.h, body.w), cs)
+    popClipRect(context)
+}
+
+
+fun pushContainerBody(context: Context, container: Container, body: Rect, opt: Opt) {
+    if (opt.value.inv() == Opt.NO_SCROLL.value) {
+        scrollbars(context, container, body); }
+    pushLayout(context, expandRect(body, -context.style.padding), container.scroll)
+    container.body = body
+}
+
+
+fun beginRootContainer(context: Context, container: Container) {
+    context.containerStack.addLast(container)
+    /* push container to roots list and push head command */
+    context.rootList.addLast(container)
+    container.head = pushJump(context, null)
+    /* set as hover root if the mouse is overlapping this container and it has a
+    ** higher zindex than the current hover root */
+    if (rectOverlapsVec2(container.rect, context.mousePos) &&
+            (context.nextHoverRoot == null || container.zIndex > context.nextHoverRoot!!.zIndex)
+    ) {
+        context.nextHoverRoot = container
+    }
+    /* clipping is reset here in case a root-container is made within
+    ** another root-containers's begin/end block; this prevents the inner
+    ** root-container being clipped to the outer */
+    context.clipStack.addLast(UNCLIPPED_RECT)
+}
+
+
+fun endRootContainer(context: Context) {
+    /* push tail 'goto' jump command and set head 'skip' command. the final steps
+    ** on initing these are done in mu_end() */
+    val container = getCurrentContainer(context)
+    container.tail = pushJump(context, null)
+    if (container.head is Command.JumpCommand)
+        (container.head as Command.JumpCommand).dst = context.commandList.last()
+    /* pop base clip rect and container */
+    popClipRect(context)
+    popContainer(context)
+}
+
+
+fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Opt): Res {
+    val id = getId(context, title)
+    val container = getContainer(context, id, opt)
+    if (container == null || !container.open) {
+        return 0; }
+    context.idStack.addLast(id)
+
+    if (container.rect.w == 0) {
+        container.rect = rect; }
+    beginRootContainer(context, container)
+    val body = container.rect
+
+    /* draw frame */
+    if (opt.value.inv() == Opt.NO_FRAME.value) {
+        context.drawFrame(context, rect, Colors.WINDOW_BG)
+    }
+
+    /* do title bar */
+    if (opt.value.inv() == Opt.NO_TITLE.value) {
+        val tr = rect
+        tr.h = context.style.title_height
+        context.drawFrame(context, tr, Colors.TITLE_BG)
+
+        /* do title text */
+        if (opt.value.inv() == Opt.NO_TITLE.value) {
+            val id = getId(context, "!title")
+            updateControl(context, id, tr, opt)
+            drawControlText(context, title, tr, Colors.TITLE_TEXT, opt)
+            if (id == context.focus && context.mouseDown == Mouse.LEFT) {
+                container.rect.x += context.mouseDelta.x
+                container.rect.y += context.mouseDelta.y
+            }
+            body.y += tr.h
+            body.h -= tr.h
+        }
+
+        /* do `close` button */
+        if (opt.value.inv() == Opt.NO_CLOSE.value) {
+            val id = getId(context, "!close")
+            val r = Rect(tr.x + tr.w - tr.h, tr.y, tr.h, tr.h)
+            tr.w -= r.w
+            drawIcon(context, Icon.CLOSE, r, context.style.colors[Colors.TITLE_TEXT.ordinal])
+            updateControl(context, id, r, opt)
+            if (context.mousePressed == Mouse.LEFT && id == context.focus) {
+                container.open = false
+            }
+        }
+    }
+
+    pushContainerBody(context, container, body, opt)
+
+    /* do `resize` handle */
+    if (opt.value.inv() == Opt.NO_RESIZE.value) {
+        val sz = context.style.title_height
+        val id = getId(context, "!resize")
+        val r = Rect(rect.x + rect.w - sz, rect.y + rect.h - sz, sz, sz)
+        updateControl(context, id, r, opt)
+        if (id == context.focus && context.mouseDown == Mouse.LEFT) {
+            container.rect.w = max(96, container.rect.w + context.mouseDelta.x)
+            container.rect.h = max(64, container.rect.h + context.mouseDelta.y)
+        }
+    }
+
+    /* resize to content size */
+    if (opt == Opt.AUTO_SIZE) {
+        val r = getLayout(context).body
+        container.rect.w = container.contentSize.x + (container.rect.w - r.w)
+        container.rect.h = container.contentSize.y + (container.rect.h - r.h)
+    }
+
+    /* close if this is a popup window and elsewhere was clicked */
+    if (opt == Opt.POPUP && context.mousePressed != Mouse.NONE && context.hoverRoot != container) {
+        container.open = false
+    }
+
+    pushClipRect(context, container.body)
+    return Res.ACTIVE
+}
+
+
+fun endWindow(context: Context) {
+    popClipRect(context)
+    endRootContainer(context)
+}
+
+
+fun openPopup(context: Context, name: String) {
+    val container = getContainer(context, name) ?: return
+    /* set as hover root so popup isn't closed in begin_window_ex()  */
+    context.hoverRoot = container
+    context.nextHoverRoot = container
+    /* position at mouse cursor, open and bring-to-front */
+    container.rect = Rect(context.mousePos.x, context.mousePos.y, 1, 1)
+    container.open = true
+    bringToFront(context, container)
+}
+
+
+fun beginPopup(context: Context, name: String): Res {
+    val opt = Opt.POPUP.value or Opt.AUTO_SIZE.value or Opt.NO_RESIZE.value or
+            Opt.NO_SCROLL.value or Opt.NO_TITLE.value or Opt.CLOSED.value
+    return beginWindowEx(context, name, Rect(0, 0, 0, 0), opt)
+}
+
+
+fun endPopup(context: Context) {
+    endWindow(context)
+}
+
+
+fun beginPanelEx(context: Context, name: String, opt: Opt) {
+    pushId(context, name)
+    val container = getContainer(context, context.lastId, opt) ?: return
+    container.rect = layoutNext(context)
+    if (opt.value.inv() == Opt.NO_FRAME.value) {
+        context.drawFrame(context, container.rect, Colors.PANEL_BG)
+    }
+    context.containerStack.addLast(container)
+    pushContainerBody(context, container, container.rect, opt)
+    pushClipRect(context, container.body)
+}
+
+
+fun endPanel(context: Context) {
+    popClipRect(context)
+    popContainer(context)
 }
