@@ -50,48 +50,48 @@ class Style(
     val indent: Int,
     val title_height: Int,
     val scrollbar_size: Int,
-    val thumb_size: Int,
+    val thumbSize: Int,
     val colors: Array<Color>
 )
 
 class Context(
-        /* callbacks */
-        var textWidth: (font: Font, text: String) -> Int = { _, _ -> 0 },
-        var textHeight: ((font: Font) -> Int) = { _ -> 0 },
-        var drawFrame: ((ctx: Context, rect: Rect, color: Colors) -> Unit) = { _, _, _ -> },
-        /* core state */
-        val style: Style,
-        var hover: Id = 0U,
-        var focus: Id = 0U,
-        var lastId: Id = 0U,
-        var lastRect: Rect = UNCLIPPED_RECT,
-        var lastZIndex: Int = 0,
-        var updatedFocus: Int = 0,
-        var frame: Int = 0,
-        var hoverRoot: Container? = null,
-        var nextHoverRoot: Container? = null,
-        var scrollTarget: Container? = null,
-        val numberEditBuf: CharArray = charArrayOf(),
-        val number_edit: Id = 0U,
-        /* stacks */
-        val commandList: ArrayDeque<Command> = ArrayDeque(COMMAND_LIST_SIZE),
-        val rootList: ArrayDeque<Container> = ArrayDeque(ROOT_LIST_SIZE),
-        val containerStack: ArrayDeque<Container> = ArrayDeque(CONTAINER_STACK_SIZE),
-        val clipStack: ArrayDeque<Rect> = ArrayDeque(CLIP_STACK_SIZE),
-        val idStack: ArrayDeque<Id> = ArrayDeque(ID_STACK_SIZE),
-        val layoutStack: ArrayDeque<Layout> = ArrayDeque(LAYOUT_STACK_SIZE),
-        /* retained state pools */
-        val containerPool: Array<PoolItem>? = null,
-        val containers: Array<Container>? = null,
-        val treeNodePool: Array<PoolItem>? = null,
-        /* input state */
-        var mousePos: Vec2 = Vec2(0, 0),
-        var lastMousePos: Vec2 = Vec2(0, 0),
-        val mouseDelta: Vec2 = Vec2(0, 0),
-        var scrollDelta: Vec2 = Vec2(0, 0),
-        var mouseDown: Mouse = Mouse.NONE,
-        var mousePressed: Mouse = Mouse.NONE,
-        var keyDown: Key = Key.NONE,
-        var keyPressed: Key = Key.NONE,
-        var inputText: String = ""
+    /* callbacks */
+    var textWidth: (font: Font, text: String) -> Int = { _, _ -> 0 },
+    var textHeight: ((font: Font) -> Int) = { _ -> 0 },
+    var drawFrame: ((ctx: Context, rect: Rect, color: Colors) -> Unit) = { _, _, _ -> },
+    /* core state */
+    val style: Style,
+    var hover: Id = 0U,
+    var focus: Id = 0U,
+    var lastId: Id = 0U,
+    var lastRect: Rect = UNCLIPPED_RECT,
+    var lastZIndex: Int = 0,
+    var updatedFocus: Int = 0,
+    var frame: Int = 0,
+    var hoverRoot: Container? = null,
+    var nextHoverRoot: Container? = null,
+    var scrollTarget: Container? = null,
+    var numberEditBuf: String = "",
+    var numberEdit: Id = 0U,
+    /* stacks */
+    val commandList: ArrayDeque<Command> = ArrayDeque(COMMAND_LIST_SIZE),
+    val rootList: ArrayDeque<Container> = ArrayDeque(ROOT_LIST_SIZE),
+    val containerStack: ArrayDeque<Container> = ArrayDeque(CONTAINER_STACK_SIZE),
+    val clipStack: ArrayDeque<Rect> = ArrayDeque(CLIP_STACK_SIZE),
+    val idStack: ArrayDeque<Id> = ArrayDeque(ID_STACK_SIZE),
+    val layoutStack: ArrayDeque<Layout> = ArrayDeque(LAYOUT_STACK_SIZE),
+    /* retained state pools */
+    val containerPool: Array<PoolItem>? = null,
+    val containers: Array<Container>? = null,
+    val treeNodePool: Array<PoolItem>? = null,
+    /* input state */
+    var mousePos: Vec2 = Vec2(0, 0),
+    var lastMousePos: Vec2 = Vec2(0, 0),
+    val mouseDelta: Vec2 = Vec2(0, 0),
+    var scrollDelta: Vec2 = Vec2(0, 0),
+    var mouseDown: Mouse = Mouse.NONE,
+    var mousePressed: Mouse = Mouse.NONE,
+    var keyDown: Key = Key.NONE,
+    var keyPressed: Key = Key.NONE,
+    var inputText: String = ""
 )

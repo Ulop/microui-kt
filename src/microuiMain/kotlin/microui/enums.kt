@@ -30,6 +30,7 @@ enum class Icon{
 }
 
 enum class Res(val value: Int){
+    NONE(0),
     ACTIVE(1 shl 0),
     SUBMIT(1 shl 1),
     CHANGE(1 shl 2)

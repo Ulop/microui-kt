@@ -1,5 +1,10 @@
 package microui
 
+import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.toKString
+import platform.posix.sprintf
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -725,4 +730,146 @@ fun textBoxRaw(context: Context, buffer: String, bufferSize: Int, id: Id, rect: 
     }
 
     return res
+}
+
+fun numberTextBox(context: Context, value: Float, rect: Rect, id: Id): Int {
+    if (context.mousePressed == Mouse.LEFT && context.keyDown == Key.SHIFT && context.hover == id) {
+        context.numberEdit = id
+        context.numberEditBuf = value.toString()
+    }
+    if (context.numberEdit == id) {
+        val res = textBoxRaw(context, context.numberEditBuf, context.numberEditBuf.length, id, rect, Opt.NONE)
+        if (res == Res.SUBMIT.value || context.focus != id) {
+            context.numberEdit = 0U
+        } else {
+            return 1
+        }
+    }
+    return 0
+}
+
+fun textBoxEx(context: Context, buffer: String, bufferSize: Int, opt: Opt): Int {
+    val id = getId(context, buffer)
+    val r = layoutNext(context)
+    return textBoxRaw(context, buffer, bufferSize, id, r, opt)
+}
+
+fun sliderEx(context: Context, value: Float, low: Float, high: Float, step: Float, fmt: String, opt: Opt): Int {
+    var innerValue = value
+    var res = 0
+    val last = value
+    var v = last
+    val id = getId(context, value.toString())
+    val base = layoutNext(context)
+    /* handle text input mode */
+    if (numberTextBox(context, v, base, id) != 0) {
+        return res; }
+
+    /* handle normal mode */
+    updateControl(context, id, base, opt)
+
+    /* handle input */
+    if (context.focus == id &&
+            (context.mouseDown.value or context.mousePressed.value) == Mouse.LEFT.value) {
+        v = low + (context.mousePos.x - base.x) * (high - low) / base.w
+        if (step != 0f) {
+            v = (((v + step / 2) / step)) * step; }
+    }
+    /* clamp and store value, update res */
+    innerValue = clamp(v.toInt(), low.toInt(), high.toInt()).toFloat()
+    if (last != v) {
+        res = res or Res.CHANGE.value; }
+
+    /* draw base */
+    drawControlFrame(context, id, base, Colors.BASE, opt)
+    /* draw thumb */
+    val w = context.style.thumbSize
+    val x = (v - low) * (base.w - w) / (high - low)
+    val thumb = Rect(base.x + x.toInt(), base.y, w, base.h)
+    drawControlFrame(context, id, thumb, Colors.BUTTON, opt)
+    /* draw text  */
+    memScoped {
+        val buffer = allocArray<ByteVar>(MAX_FMT)
+        sprintf(buffer, fmt, v)
+        drawControlText(context, buffer.toKString(), base, Colors.TEXT, opt)
+    }
+
+    return res
+}
+
+fun numberEx(context: Context, value: Float, step: Float, fmt: String, opt: Opt): Int {
+    var innerValue = value
+    var res = 0
+    val id = getId(context, value.toString())
+    val base = layoutNext(context)
+    val last = value
+
+    /* handle text input mode */
+    if (numberTextBox(context, value, base, id) != 0) {
+        return res
+    }
+
+    /* handle normal mode */
+    updateControl(context, id, base, opt)
+
+    /* handle input */
+    if (context.focus == id && context.mouseDown == Mouse.LEFT) {
+        innerValue += context.mouseDelta.x * step
+    }
+    /* set flag if value changed */
+    if (innerValue != last) {
+        res = res or Res.CHANGE.value
+    }
+
+    /* draw base */
+    drawControlFrame(context, id, base, Colors.BASE, opt)
+    /* draw text  */
+    memScoped {
+        val buffer = allocArray<ByteVar>(MAX_FMT)
+        sprintf(buffer, fmt, innerValue)
+        drawControlText(context, buffer.toKString(), base, Colors.TEXT, opt)
+    }
+
+    return res
+}
+
+fun header(context: Context, label: String, isTreeNode: Boolean, opt: Opt): Res {
+    val id = getId(context, label)
+    val idx = poolGet(context, context.treeNodePool!!, id)
+    val width = -1
+    layoutRow(context, intArrayOf(1), width)
+
+    var active = (idx >= 0)
+    val expanded = if (opt == Opt.EXPANDED) !active else active
+    val r = layoutNext(context)
+    updateControl(context, id, r, Opt.NONE)
+
+    /* handle click */
+    active = active xor (context.mousePressed == Mouse.LEFT && context.focus == id)
+
+    /* update pool ref */
+    if (idx >= 0) {
+        if (active) {
+            poolUpdate(context, context.treeNodePool, idx); } else {
+            context.treeNodePool[idx] = PoolItem(0U, 0)
+        }
+    } else if (active) {
+        initPool(context, context.treeNodePool, TREE_NODE_POOL_SIZE, id)
+    }
+
+    /* draw */
+    if (isTreeNode) {
+        if (context.hover == id) {
+            context.drawFrame(context, r, Colors.BUTTON_HOVER); }
+    } else {
+        drawControlFrame(context, id, r, Colors.BUTTON, Opt.NONE)
+    }
+    drawIcon(
+            context, if (expanded) Icon.EXPANDED else Icon.COLLAPSED,
+            Rect(r.x, r.y, r.h, r.h), context.style.colors[Colors.TEXT.ordinal])
+    r.x += r.h - context.style.padding
+    r.w -= r.h - context.style.padding
+    drawControlText(context, label, r, Colors.TEXT, Opt.NONE)
+
+    return if (expanded) Res.ACTIVE else Res.NONE
 }
