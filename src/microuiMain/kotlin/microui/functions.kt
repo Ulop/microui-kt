@@ -873,3 +873,63 @@ fun header(context: Context, label: String, isTreeNode: Boolean, opt: Opt): Res 
 
     return if (expanded) Res.ACTIVE else Res.NONE
 }
+
+fun headEx(context: Context, label: String, opt: Opt): Res {
+    return header(context, label, false, opt)
+}
+
+fun beginTreeNodeEx(context: Context, label: String, opt: Opt): Res {
+    val res = header(context, label, true, opt)
+    if (res == Res.ACTIVE) {
+        val layout = getLayout(context)
+        if (layout.indent != null) {
+            layout.indent = (layout.indent ?: 0) + context.style.indent
+        }
+        context.idStack.addLast(context.lastId)
+    }
+    return res
+}
+
+fun endTreeNode(context: Context) {
+    val layout = getLayout(context)
+    if (layout.indent != null) {
+        layout.indent = (layout.indent ?: 0) - context.style.indent
+    }
+    popId(context)
+}
+
+fun scrollbar(context: Context, cnt: Container, b: Rect, cs: Rect, x: Int, y: Int, w: Int, h: Int) {
+    /* only add scrollbar if content size is larger than body */
+    val maxScroll = cs.y - b.h
+
+    if (maxScroll > 0 && b.h > 0) {
+        val id = getId(context, "!scrollbar$y")
+
+        /* get sizing / positioning */
+        val base = b
+        base.x = b.x + b.w
+        base.w = context.style.scrollbarSize
+
+        /* handle input */
+        updateControl(context, id, base, 0)
+        if (context.focus == id && context.mouseDown == Mouse.LEFT) {
+            cnt.scroll.y += context.mouseDelta.y * cs.y / base.h
+        }
+        /* clamp scroll to limits */
+        cnt.scroll.y = clamp(cnt.scroll.y, 0, maxScroll)
+
+        /* draw base and thumb */
+        context.drawFrame(context, base, Colors.SCROLL_BASE)
+        val thumb = base
+        thumb.h = max(context.style.thumbSize, base.h * b.h / cs.y)
+        thumb.y += cnt.scroll.y * (base.h - thumb.h) / maxScroll
+        context.drawFrame(context, thumb, Colors.SCROLL_THUMB)
+
+        /* set this as the scroll_target (will get scrolled on mousewheel) */
+        /* if the mouse is over it */
+        if (mouseOver(context, b)) {
+            context.scrollTarget = cnt; }
+    } else {
+        cnt.scroll.y = 0
+    }
+}

@@ -19,16 +19,16 @@ sealed class Command {
 }
 
 class Layout(
-        val body: Rect,
-        var next: Rect? = null,
-        var position: Vec2? = null,
-        val size: Vec2? = null,
-        val max: Vec2? = null,
-        var widths: IntArray = intArrayOf(),
-        var itemIndex: Int? = null,
-        var nextRow: Int? = null,
-        var nextType: LayoutType? = null,
-        val indent: Int? = null
+    val body: Rect,
+    var next: Rect? = null,
+    var position: Vec2? = null,
+    val size: Vec2? = null,
+    val max: Vec2? = null,
+    var widths: IntArray = intArrayOf(),
+    var itemIndex: Int? = null,
+    var nextRow: Int? = null,
+    var nextType: LayoutType? = null,
+    var indent: Int? = null
 )
 
 class Container(
@@ -49,7 +49,7 @@ class Style(
     val spacing: Int,
     val indent: Int,
     val title_height: Int,
-    val scrollbar_size: Int,
+    val scrollbarSize: Int,
     val thumbSize: Int,
     val colors: Array<Color>
 )
