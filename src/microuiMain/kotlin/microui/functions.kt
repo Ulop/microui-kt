@@ -12,27 +12,30 @@ import kotlin.math.pow
 val UNCLIPPED_RECT = Rect(0, 0, 0x1000000, 0x1000000)
 
 val defaultStyle = Style(
-        /* font | size | padding | spacing | indent */
-        null, Vec2(68, 10), 5, 4, 24,
-        /* title_height | scrollbar_size | thumb_size */
-        24, 12, 8,
-        arrayOf(
-                Color(230U, 230U, 230U, 255U), /* MU_COLOR_TEXT */
-                Color(25U, 25U, 25U, 255U), /* MU_COLOR_BORDER */
-                Color(50U, 50U, 50U, 255U), /* MU_COLOR_WINDOWBG */
-                Color(25U, 25U, 25U, 255U), /* MU_COLOR_TITLEBG */
-                Color(240U, 240U, 240U, 255U), /* MU_COLOR_TITLETEXT */
-                Color(0U, 0U, 0U, 0U), /* MU_COLOR_PANELBG */
-                Color(75U, 75U, 75U, 255U), /* MU_COLOR_BUTTON */
-                Color(95U, 95U, 95U, 255U), /* MU_COLOR_BUTTONHOVER */
-                Color(115U, 115U, 115U, 255U), /* MU_COLOR_BUTTONFOCUS */
-                Color(30U, 30U, 30U, 255U), /* MU_COLOR_BASE */
-                Color(35U, 35U, 35U, 255U), /* MU_COLOR_BASEHOVER */
-                Color(40U, 40U, 40U, 255U), /* MU_COLOR_BASEFOCUS */
-                Color(43U, 43U, 43U, 255U), /* MU_COLOR_SCROLLBASE */
-                Color(30U, 30U, 30U, 255U)  /* MU_COLOR_SCROLLTHUMB */
-        )
+    /* font | size | padding | spacing | indent */
+    null, Vec2(68, 10), 5, 4, 24,
+    /* title_height | scrollbar_size | thumb_size */
+    24, 12, 8,
+    arrayOf(
+        Color(230U, 230U, 230U, 255U), /* MU_COLOR_TEXT */
+        Color(25U, 25U, 25U, 255U), /* MU_COLOR_BORDER */
+        Color(50U, 50U, 50U, 255U), /* MU_COLOR_WINDOWBG */
+        Color(25U, 25U, 25U, 255U), /* MU_COLOR_TITLEBG */
+        Color(240U, 240U, 240U, 255U), /* MU_COLOR_TITLETEXT */
+        Color(0U, 0U, 0U, 0U), /* MU_COLOR_PANELBG */
+        Color(75U, 75U, 75U, 255U), /* MU_COLOR_BUTTON */
+        Color(95U, 95U, 95U, 255U), /* MU_COLOR_BUTTONHOVER */
+        Color(115U, 115U, 115U, 255U), /* MU_COLOR_BUTTONFOCUS */
+        Color(30U, 30U, 30U, 255U), /* MU_COLOR_BASE */
+        Color(35U, 35U, 35U, 255U), /* MU_COLOR_BASEHOVER */
+        Color(40U, 40U, 40U, 255U), /* MU_COLOR_BASEFOCUS */
+        Color(43U, 43U, 43U, 255U), /* MU_COLOR_SCROLLBASE */
+        Color(30U, 30U, 30U, 255U)  /* MU_COLOR_SCROLLTHUMB */
+    )
 )
+
+infix fun Int.has(opt: Opt) = this and opt.value == opt.value
+infix fun Int.or(opt: Opt) = this or opt.value
 
 fun expandRect(rect: Rect, n: Int): Rect {
     return Rect(rect.x - n, rect.y - n, rect.w + n * 2, rect.h + n * 2)
@@ -91,7 +94,6 @@ fun begin(context: Context) {
 }
 
 fun end(context: Context) {
-    var i = 0
     var n = 0
     /* check stacks */
     require(context.containerStack.isEmpty())
@@ -131,27 +133,25 @@ fun end(context: Context) {
     context.lastMousePos = context.mousePos
 
     /* sort root containers by zindex */
-    n = context.rootList.lastIndex
     context.rootList.sortBy { it.zIndex }
 
     /* set root container jump commands */
-/*    for (i in 0..n) {
+    for (i in 0..context.rootList.lastIndex) {
         val container = context.rootList[i]
-        *//* if this is the first container then make the first command jump to it.
-        ** otherwise set the previous container's tail to jump to this one *//*
+        /*if this is the first container then make the first command jump to it.
+       ** otherwise set the previous container's tail to jump to this one */
         if (i == 0) {
-           val cmd = context.commandList
-            cmd.first().
-            cmd->jump.dst = (char*) container->head+sizeof(mu_JumpCommand)
+            val cmd = context.commandList.first()
+            (cmd as Command.JumpCommand).dst = container.head
         } else {
-            mu_Container * prev = ctx->root_list.items[i-1]
-            prev->tail->jump.dst = (char*) cnt->head+sizeof(mu_JumpCommand)
+            val prev = context.rootList[i - 1]
+            (prev.tail as Command.JumpCommand).dst = container.head
         }
-        *//* make the last container's tail jump to the end of command list *//*
-        if (i == n - 1) { cnt ->
-            tail->jump.dst = ctx->command_list.items+ctx->command_list.idx
+        // make the last container 's tail jump to the end of command list
+        if (i == context.rootList.lastIndex) {
+            (container.tail as Command.JumpCommand).dst = context.commandList.last()
         }
-    }*/
+    }
 }
 
 fun bringToFront(context: Context, container: Container) {
@@ -234,19 +234,19 @@ fun popContainer(context: Context) {
     popId(context)
 }
 
-fun getContainer(context: Context, id: Id, opt: Opt): Container? {
+fun getContainer(context: Context, id: Id, opt: Int): Container? {
     context.containerPool ?: return null
 
     var container: Container? = null
     /* try to get existing container from pool */
     var idx = poolGet(context, context.containerPool, id)
     if (idx >= 0) {
-        if (context.containers?.get(idx)?.open == true || opt == Opt.CLOSED) {
+        if (context.containers?.get(idx)?.open == true || opt has Opt.CLOSED) {
             poolUpdate(context, context.containerPool, idx)
         }
         return context.containers?.get(idx)
     }
-    if (opt == Opt.CLOSED) {
+    if (opt has Opt.CLOSED) {
         return null
     }
 
@@ -260,7 +260,7 @@ fun getContainer(context: Context, id: Id, opt: Opt): Container? {
 }
 
 fun getContainer(context: Context, name: String) =
-        getContainer(context, getId(context, name), Opt.NONE)
+    getContainer(context, getId(context, name), 0)
 
 /*============================================================================
 ** pool
@@ -541,23 +541,24 @@ fun inHoverRoot(context: Context): Boolean {
     return false
 }
 
-fun drawControlFrame(context: Context, id: Id, rect: Rect, color: Colors, opt: Opt) {
+fun drawControlFrame(context: Context, id: Id, rect: Rect, color: Colors, opt: Int) {
     var colorId = color.ordinal
-    if (opt == Opt.NO_FRAME) {
-        return; }
+    if (opt has Opt.NO_FRAME) {
+        return
+    }
     colorId += if (context.focus == id) 2 else if (context.hover == id) 1 else 0
     context.drawFrame(context, rect, Colors.values()[colorId])
 }
 
 
-fun drawControlText(context: Context, str: String, rect: Rect, color: Colors, opt: Opt) {
+fun drawControlText(context: Context, str: String, rect: Rect, color: Colors, opt: Int) {
     val font = context.style.font
     val tw = context.textWidth(font!!, str)
     pushClipRect(context, rect)
     val posY = rect.y + (rect.h - context.textHeight(font)) / 2
-    val posX = when (opt) {
-        Opt.ALIGN_CENTER -> rect.x + (rect.w - tw) / 2
-        Opt.ALIGN_RIGHT -> rect.x + rect.w - tw - context.style.padding
+    val posX = when {
+        opt has Opt.ALIGN_CENTER -> rect.x + (rect.w - tw) / 2
+        opt has Opt.ALIGN_RIGHT -> rect.x + rect.w - tw - context.style.padding
         else -> rect.x + context.style.padding
     }
     drawText(context, font, str, Vec2(posX, posY), context.style.colors[color.ordinal])
@@ -570,13 +571,13 @@ fun mouseOver(context: Context, rect: Rect): Boolean {
             && inHoverRoot(context))
 }
 
-fun updateControl(context: Context, id: Id, rect: Rect, opt: Opt) {
+fun updateControl(context: Context, id: Id, rect: Rect, opt: Int) {
     val mouseOver = mouseOver(context, rect)
 
     if (context.focus == id) {
         context.updatedFocus = 1
     }
-    if (opt == Opt.NO_INTERACT) {
+    if (opt has Opt.NO_INTERACT) {
         return
     }
     if (mouseOver && context.mouseDown == Mouse.NONE) {
@@ -587,7 +588,7 @@ fun updateControl(context: Context, id: Id, rect: Rect, opt: Opt) {
         if (context.mousePressed != Mouse.NONE && !mouseOver) {
             setFocus(context, 0U)
         }
-        if (context.mouseDown == Mouse.NONE && opt.value.inv() == Opt.HOLD_FOCUS.value) {
+        if (context.mouseDown == Mouse.NONE && opt.inv() has Opt.HOLD_FOCUS) {
             setFocus(context, 0U)
         }
     }
@@ -634,11 +635,11 @@ fun text(context: Context, text: String) {
 
 
 fun label(context: Context, text: String) {
-    drawControlText(context, text, layoutNext(context), Colors.TEXT, Opt.NONE)
+    drawControlText(context, text, layoutNext(context), Colors.TEXT, 0)
 }
 
 
-fun buttonEx(context: Context, label: String, icon: Icon, opt: Opt): Int {
+fun buttonEx(context: Context, label: String, icon: Icon, opt: Int): Int {
     var res = 0
     val id = if (label.isNotEmpty())
         getId(context, label)
@@ -667,27 +668,27 @@ fun checkBox(context: Context, label: String, state: String): Int {
     val id = getId(context, state)
     var r = layoutNext(context)
     val box = Rect(r.x, r.y, r.h, r.h)
-    updateControl(context, id, r, Opt.NONE)
+    updateControl(context, id, r, 0)
     /* handle click */
     if (context.mousePressed == Mouse.LEFT && context.focus == id) {
         res = res or Res.CHANGE.value
         // *state = !* state
     }
     /* draw */
-    drawControlFrame(context, id, box, Colors.BASE, Opt.NONE)
+    drawControlFrame(context, id, box, Colors.BASE, 0)
     if (state.isNotEmpty()) {
         drawIcon(context, Icon.CHECK, box, context.style.colors[Colors.TEXT.ordinal])
     }
     r = Rect(r.x + box.w, r.y, r.w - box.w, r.h)
-    drawControlText(context, label, r, Colors.TEXT, Opt.NONE)
+    drawControlText(context, label, r, Colors.TEXT, 0)
     return res
 }
 
 
-fun textBoxRaw(context: Context, buffer: String, bufferSize: Int, id: Id, rect: Rect, opt: Opt): Int {
+fun textBoxRaw(context: Context, buffer: String, bufferSize: Int, id: Id, rect: Rect, opt: Int): Int {
     var buff = buffer
     var res = 0
-    updateControl(context, id, rect, Opt.values()[opt.value or Opt.HOLD_FOCUS.value])
+    updateControl(context, id, rect, opt or Opt.HOLD_FOCUS)
 
     if (context.focus == id) {
         /* handle text input */
@@ -738,7 +739,7 @@ fun numberTextBox(context: Context, value: Float, rect: Rect, id: Id): Int {
         context.numberEditBuf = value.toString()
     }
     if (context.numberEdit == id) {
-        val res = textBoxRaw(context, context.numberEditBuf, context.numberEditBuf.length, id, rect, Opt.NONE)
+        val res = textBoxRaw(context, context.numberEditBuf, context.numberEditBuf.length, id, rect, 0)
         if (res == Res.SUBMIT.value || context.focus != id) {
             context.numberEdit = 0U
         } else {
@@ -748,13 +749,13 @@ fun numberTextBox(context: Context, value: Float, rect: Rect, id: Id): Int {
     return 0
 }
 
-fun textBoxEx(context: Context, buffer: String, bufferSize: Int, opt: Opt): Int {
+fun textBoxEx(context: Context, buffer: String, bufferSize: Int, opt: Int): Int {
     val id = getId(context, buffer)
     val r = layoutNext(context)
     return textBoxRaw(context, buffer, bufferSize, id, r, opt)
 }
 
-fun sliderEx(context: Context, value: Float, low: Float, high: Float, step: Float, fmt: String, opt: Opt): Int {
+fun sliderEx(context: Context, value: Float, low: Float, high: Float, step: Float, fmt: String, opt: Int): Int {
     var innerValue = value
     var res = 0
     val last = value
@@ -797,7 +798,7 @@ fun sliderEx(context: Context, value: Float, low: Float, high: Float, step: Floa
     return res
 }
 
-fun numberEx(context: Context, value: Float, step: Float, fmt: String, opt: Opt): Int {
+fun numberEx(context: Context, value: Float, step: Float, fmt: String, opt: Int): Int {
     var innerValue = value
     var res = 0
     val id = getId(context, value.toString())
@@ -833,16 +834,16 @@ fun numberEx(context: Context, value: Float, step: Float, fmt: String, opt: Opt)
     return res
 }
 
-fun header(context: Context, label: String, isTreeNode: Boolean, opt: Opt): Res {
+fun header(context: Context, label: String, isTreeNode: Boolean, opt: Int): Res {
     val id = getId(context, label)
     val idx = poolGet(context, context.treeNodePool!!, id)
     val width = -1
     layoutRow(context, intArrayOf(1), width)
 
     var active = (idx >= 0)
-    val expanded = if (opt == Opt.EXPANDED) !active else active
+    val expanded = if (opt has Opt.EXPANDED) !active else active
     val r = layoutNext(context)
-    updateControl(context, id, r, Opt.NONE)
+    updateControl(context, id, r, 0)
 
     /* handle click */
     active = active xor (context.mousePressed == Mouse.LEFT && context.focus == id)
@@ -862,23 +863,23 @@ fun header(context: Context, label: String, isTreeNode: Boolean, opt: Opt): Res 
         if (context.hover == id) {
             context.drawFrame(context, r, Colors.BUTTON_HOVER); }
     } else {
-        drawControlFrame(context, id, r, Colors.BUTTON, Opt.NONE)
+        drawControlFrame(context, id, r, Colors.BUTTON, 0)
     }
     drawIcon(
             context, if (expanded) Icon.EXPANDED else Icon.COLLAPSED,
             Rect(r.x, r.y, r.h, r.h), context.style.colors[Colors.TEXT.ordinal])
     r.x += r.h - context.style.padding
     r.w -= r.h - context.style.padding
-    drawControlText(context, label, r, Colors.TEXT, Opt.NONE)
+    drawControlText(context, label, r, Colors.TEXT, 0)
 
     return if (expanded) Res.ACTIVE else Res.NONE
 }
 
-fun headEx(context: Context, label: String, opt: Opt): Res {
+fun headEx(context: Context, label: String, opt: Int): Res {
     return header(context, label, false, opt)
 }
 
-fun beginTreeNodeEx(context: Context, label: String, opt: Opt): Res {
+fun beginTreeNodeEx(context: Context, label: String, opt: Int): Res {
     val res = header(context, label, true, opt)
     if (res == Res.ACTIVE) {
         val layout = getLayout(context)
@@ -910,7 +911,7 @@ fun scrollbar(context: Context, container: Container, b: Rect, cs: Vec2) {
         b.w = context.style.scrollbarSize
 
         /* handle input */
-        updateControl(context, id, b, Opt.NONE)
+        updateControl(context, id, b, 0)
         if (context.focus == id && context.mouseDown == Mouse.LEFT) {
             container.scroll.y += context.mouseDelta.y * cs.y / b.h
         }
@@ -951,8 +952,8 @@ fun scrollbars(context: Context, container: Container, body: Rect) {
 }
 
 
-fun pushContainerBody(context: Context, container: Container, body: Rect, opt: Opt) {
-    if (opt.value.inv() == Opt.NO_SCROLL.value) {
+fun pushContainerBody(context: Context, container: Container, body: Rect, opt: Int) {
+    if (opt.inv() has Opt.NO_SCROLL) {
         scrollbars(context, container, body); }
     pushLayout(context, expandRect(body, -context.style.padding), container.scroll)
     container.body = body
@@ -991,11 +992,12 @@ fun endRootContainer(context: Context) {
 }
 
 
-fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Opt): Res {
+fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Int): Res {
     val id = getId(context, title)
     val container = getContainer(context, id, opt)
     if (container == null || !container.open) {
-        return 0; }
+        return Res.NONE
+    }
     context.idStack.addLast(id)
 
     if (container.rect.w == 0) {
@@ -1004,18 +1006,18 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Opt): Res {
     val body = container.rect
 
     /* draw frame */
-    if (opt.value.inv() == Opt.NO_FRAME.value) {
+    if (opt.inv() has Opt.NO_FRAME) {
         context.drawFrame(context, rect, Colors.WINDOW_BG)
     }
 
     /* do title bar */
-    if (opt.value.inv() == Opt.NO_TITLE.value) {
+    if (opt.inv() has Opt.NO_TITLE) {
         val tr = rect
         tr.h = context.style.title_height
         context.drawFrame(context, tr, Colors.TITLE_BG)
 
         /* do title text */
-        if (opt.value.inv() == Opt.NO_TITLE.value) {
+        if (opt.inv() has Opt.NO_TITLE) {
             val id = getId(context, "!title")
             updateControl(context, id, tr, opt)
             drawControlText(context, title, tr, Colors.TITLE_TEXT, opt)
@@ -1028,7 +1030,7 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Opt): Res {
         }
 
         /* do `close` button */
-        if (opt.value.inv() == Opt.NO_CLOSE.value) {
+        if (opt.inv() has Opt.NO_CLOSE) {
             val id = getId(context, "!close")
             val r = Rect(tr.x + tr.w - tr.h, tr.y, tr.h, tr.h)
             tr.w -= r.w
@@ -1043,7 +1045,7 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Opt): Res {
     pushContainerBody(context, container, body, opt)
 
     /* do `resize` handle */
-    if (opt.value.inv() == Opt.NO_RESIZE.value) {
+    if (opt.inv() has Opt.NO_RESIZE) {
         val sz = context.style.title_height
         val id = getId(context, "!resize")
         val r = Rect(rect.x + rect.w - sz, rect.y + rect.h - sz, sz, sz)
@@ -1055,14 +1057,14 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Opt): Res {
     }
 
     /* resize to content size */
-    if (opt == Opt.AUTO_SIZE) {
+    if (opt has Opt.AUTO_SIZE) {
         val r = getLayout(context).body
         container.rect.w = container.contentSize.x + (container.rect.w - r.w)
         container.rect.h = container.contentSize.y + (container.rect.h - r.h)
     }
 
     /* close if this is a popup window and elsewhere was clicked */
-    if (opt == Opt.POPUP && context.mousePressed != Mouse.NONE && context.hoverRoot != container) {
+    if (opt has Opt.POPUP && context.mousePressed != Mouse.NONE && context.hoverRoot != container) {
         container.open = false
     }
 
@@ -1101,11 +1103,11 @@ fun endPopup(context: Context) {
 }
 
 
-fun beginPanelEx(context: Context, name: String, opt: Opt) {
+fun beginPanelEx(context: Context, name: String, opt: Int) {
     pushId(context, name)
     val container = getContainer(context, context.lastId, opt) ?: return
     container.rect = layoutNext(context)
-    if (opt.value.inv() == Opt.NO_FRAME.value) {
+    if (opt.inv() has Opt.NO_FRAME) {
         context.drawFrame(context, container.rect, Colors.PANEL_BG)
     }
     context.containerStack.addLast(container)
