@@ -1,9 +1,6 @@
 package microui
 
-import SDL.SDL_CreateWindow
-import SDL.SDL_GL_CreateContext
-import SDL.SDL_WINDOWPOS_UNDEFINED
-import SDL.SDL_WINDOW_OPENGL
+import SDL.*
 import kotlinx.cinterop.*
 import platform.opengl32.*
 import kotlin.math.min
@@ -149,4 +146,46 @@ fun drawText(text: String, pos: Vec2, color: UByte) {
         pushQuad(dst, src, color)
         dst.x += dst.w
     }
+}
+
+fun drawIcon(id: Int, rect: Rect, color: UByte) {
+    val src = atlas[id] ?: error("Atlas $id not found")
+    val x = rect.x + (rect.w - src.w) / 2
+    val y = rect.y + (rect.h - src.h) / 2
+    pushQuad(Rect(x, y, src.w, src.h), src, color)
+}
+
+fun getTextWidth(text: String): Int {
+    var res = 0
+    for (p in text) {
+        if ((p.toInt() and 0xc0) == 0x80) {
+            continue; }
+        val chr = min(p.toInt(), 127)
+        val rect = atlas[ATLAS_FONT + chr] ?: error("Atlas ATLAS_FONT + $chr not found")
+        res += rect.w
+    }
+    return res
+}
+
+fun getTextHeight() = 18
+
+fun setClipRect(rect: Rect) {
+    flush()
+    glScissor(rect.x, height - (rect.y + rect.h), rect.w, rect.h)
+}
+
+fun clear(color: Color) {
+    flush()
+    glClearColor(
+        color.r.toFloat() / 255f,
+        color.g.toFloat() / 255f,
+        color.b.toFloat() / 255f,
+        color.a.toFloat() / 255f
+    )
+    glClear(GL_COLOR_BUFFER_BIT)
+}
+
+fun present() {
+    flush()
+    SDL_GL_SwapWindow(window)
 }
