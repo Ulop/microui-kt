@@ -37,6 +37,16 @@ val defaultStyle = Style(
 infix fun Int.has(opt: Opt) = this and opt.value == opt.value
 infix fun Int.or(opt: Opt) = this or opt.value
 
+fun String.format(vararg args: Any): String {
+    var result = ""
+    memScoped {
+        val temp = allocArray<ByteVar>(255)
+        sprintf(temp, this@format, args)
+        result = temp.toKString()
+    }
+    return result
+}
+
 fun expandRect(rect: Rect, n: Int): Rect {
     return Rect(rect.x - n, rect.y - n, rect.w + n * 2, rect.h + n * 2)
 }
@@ -339,10 +349,17 @@ fun pushCommand(context: Context, cmd: Command): Command {
 }
 
 
-fun nextCommand(context: Context, cmd: Command): Int {
+fun nextCommand(context: Context, holder: CommandHolder): Int {
+    if (holder.comand != null) {
+        holder.comand = Command.BaseCommand()
+    } else {
+        holder.comand = context.commandList.last()
+    }
+
     val commands = context.commandList
     for (command in commands) {
-        if (command is Command.JumpCommand) return 1
+        if (command !is Command.JumpCommand) return 1
+        holder.comand = command.dst
     }
     return 0
 }
@@ -663,9 +680,9 @@ fun buttonEx(context: Context, label: String, icon: Icon, opt: Int): Int {
 }
 
 
-fun checkBox(context: Context, label: String, state: String): Int {
+fun checkBox(context: Context, label: String, state: Int): Int {
     var res = 0
-    val id = getId(context, state)
+    val id = getId(context, state.toString())
     var r = layoutNext(context)
     val box = Rect(r.x, r.y, r.h, r.h)
     updateControl(context, id, r, 0)
@@ -676,7 +693,7 @@ fun checkBox(context: Context, label: String, state: String): Int {
     }
     /* draw */
     drawControlFrame(context, id, box, Colors.BASE, 0)
-    if (state.isNotEmpty()) {
+    if (state != 0) {
         drawIcon(context, Icon.CHECK, box, context.style.colors[Colors.TEXT.ordinal])
     }
     r = Rect(r.x + box.w, r.y, r.w - box.w, r.h)
@@ -685,14 +702,13 @@ fun checkBox(context: Context, label: String, state: String): Int {
 }
 
 
-fun textBoxRaw(context: Context, buffer: String, bufferSize: Int, id: Id, rect: Rect, opt: Int): Int {
-    var buff = buffer
+fun textBoxRaw(context: Context, buffer: Buffer, bufferSize: Int, id: Id, rect: Rect, opt: Int): Int {
     var res = 0
     updateControl(context, id, rect, opt or Opt.HOLD_FOCUS)
 
     if (context.focus == id) {
         /* handle text input */
-        var len = buffer.length
+        var len = bufferSize
         var n = min(bufferSize - len - 1, context.inputText.length)
         if (n > 0) {
             len += n
@@ -702,7 +718,7 @@ fun textBoxRaw(context: Context, buffer: String, bufferSize: Int, id: Id, rect: 
         /* handle backspace */
         if (context.keyPressed == Key.BACKSPACE && len > 0) {
             /* skip utf-8 continuation bytes */
-            buff = buff.drop(1)
+            buffer.value = buffer.value.drop(1)
             res = res or Res.CHANGE.value
         }
         /* handle return */
@@ -717,17 +733,17 @@ fun textBoxRaw(context: Context, buffer: String, bufferSize: Int, id: Id, rect: 
     if (context.focus == id) {
         val color = context.style.colors[Colors.TEXT.ordinal]
         val font = context.style.font!!
-        val textw = context.textWidth(font, buff)
+        val textw = context.textWidth(font, buffer.value)
         val texth = context.textHeight(font)
         val ofx = rect.w - context.style.padding - textw - 1
         val textx = rect.x + min(ofx, context.style.padding)
         val texty = rect.y + (rect.h - texth) / 2
         pushClipRect(context, rect)
-        drawText(context, font, buff, Vec2(textx, texty), color)
+        drawText(context, font, buffer.value, Vec2(textx, texty), color)
         drawRect(context, Rect(textx + textw, texty, 1, texth), color)
         popClipRect(context)
     } else {
-        drawControlText(context, buff, rect, Colors.TEXT, opt)
+        drawControlText(context, buffer.value, rect, Colors.TEXT, opt)
     }
 
     return res
@@ -736,10 +752,10 @@ fun textBoxRaw(context: Context, buffer: String, bufferSize: Int, id: Id, rect: 
 fun numberTextBox(context: Context, value: Float, rect: Rect, id: Id): Int {
     if (context.mousePressed == Mouse.LEFT && context.keyDown == Key.SHIFT && context.hover == id) {
         context.numberEdit = id
-        context.numberEditBuf = value.toString()
+        context.numberEditBuf = Buffer(value.toString())
     }
     if (context.numberEdit == id) {
-        val res = textBoxRaw(context, context.numberEditBuf, context.numberEditBuf.length, id, rect, 0)
+        val res = textBoxRaw(context, context.numberEditBuf, context.numberEditBuf.value.length, id, rect, 0)
         if (res == Res.SUBMIT.value || context.focus != id) {
             context.numberEdit = 0U
         } else {
@@ -749,8 +765,8 @@ fun numberTextBox(context: Context, value: Float, rect: Rect, id: Id): Int {
     return 0
 }
 
-fun textBoxEx(context: Context, buffer: String, bufferSize: Int, opt: Int): Int {
-    val id = getId(context, buffer)
+fun textBoxEx(context: Context, buffer: Buffer, bufferSize: Int, opt: Int): Int {
+    val id = getId(context, buffer.value)
     val r = layoutNext(context)
     return textBoxRaw(context, buffer, bufferSize, id, r, opt)
 }
@@ -834,7 +850,7 @@ fun numberEx(context: Context, value: Float, step: Float, fmt: String, opt: Int)
     return res
 }
 
-fun header(context: Context, label: String, isTreeNode: Boolean, opt: Int): Res {
+fun headerInner(context: Context, label: String, isTreeNode: Boolean, opt: Int): Res {
     val id = getId(context, label)
     val idx = poolGet(context, context.treeNodePool!!, id)
     val width = -1
@@ -875,12 +891,12 @@ fun header(context: Context, label: String, isTreeNode: Boolean, opt: Int): Res 
     return if (expanded) Res.ACTIVE else Res.NONE
 }
 
-fun headEx(context: Context, label: String, opt: Int): Res {
-    return header(context, label, false, opt)
+fun headerEx(context: Context, label: String, opt: Int): Res {
+    return headerInner(context, label, false, opt)
 }
 
 fun beginTreeNodeEx(context: Context, label: String, opt: Int): Res {
-    val res = header(context, label, true, opt)
+    val res = headerInner(context, label, true, opt)
     if (res == Res.ACTIVE) {
         val layout = getLayout(context)
         if (layout.indent != null) {
@@ -1072,6 +1088,9 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Int): Res {
     return Res.ACTIVE
 }
 
+fun beginTreeNode(ctx: Context, label: String) = beginTreeNodeEx(ctx, label, 0)
+
+fun beginWindow(context: Context, title: String, rect: Rect) = beginWindowEx(context, title, rect, 0)
 
 fun endWindow(context: Context) {
     popClipRect(context)
@@ -1120,3 +1139,12 @@ fun endPanel(context: Context) {
     popClipRect(context)
     popContainer(context)
 }
+
+fun button(ctx: Context, label: String) = buttonEx(ctx, label, Icon.NONE, Opt.ALIGN_CENTER.value)
+fun textBox(ctx: Context, buf: Buffer, bufsz: Int) = textBoxEx(ctx, buf, bufsz, 0)
+fun slider(ctx: Context, value: Float, lo: Float, hi: Float) =
+    sliderEx(ctx, value, lo, hi, 0f, SLIDER_FMT, Opt.ALIGN_CENTER.value)
+
+fun number(ctx: Context, value: Float, step: Float) = numberEx(ctx, value, step, SLIDER_FMT, Opt.ALIGN_CENTER.value)
+fun header(ctx: Context, label: String) = headerEx(ctx, label, 0)
+fun beginPanel(ctx: Context, name: String) = beginPanelEx(ctx, name, 0)

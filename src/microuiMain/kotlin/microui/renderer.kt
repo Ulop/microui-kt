@@ -18,7 +18,7 @@ var bufIdx = 0
 
 var window: CPointer<cnames.structs.SDL_Window>? = null
 
-fun init() = memScoped {
+fun initRendere() = memScoped {
     window = SDL_CreateWindow(
         "Microu UI Kt",
         SDL_WINDOWPOS_UNDEFINED.convert(),
@@ -80,7 +80,7 @@ fun flush() = memScoped {
 }
 
 
-fun pushQuad(dst: Rect, src: Rect, color: UByte) {
+fun pushQuad(dst: Rect, src: Rect, color: Color) {
     if (bufIdx == BUFFER_SIZE) {
         flush(); }
 
@@ -115,10 +115,10 @@ fun pushQuad(dst: Rect, src: Rect, color: UByte) {
     vertBuf[texvert_idx + 7] = (dst.y + dst.h).toFloat()
 
     /* update color buffer */
-    colorBuf[color_idx + 0] = color
-    colorBuf[color_idx + 4] = color
-    colorBuf[color_idx + 8] = color
-    colorBuf[color_idx + 12] = color
+    colorBuf[color_idx + 0] = color.r
+    colorBuf[color_idx + 4] = color.g
+    colorBuf[color_idx + 8] = color.b
+    colorBuf[color_idx + 12] = color.a
 
     /* update index buffer */
     val ubyteIdx = element_idx.toUByte()
@@ -130,11 +130,11 @@ fun pushQuad(dst: Rect, src: Rect, color: UByte) {
     indexBuf[index_idx + 5] = ubyteIdx + 1U
 }
 
-fun drawRect(rect: Rect, color: UByte) {
+fun drawRect(rect: Rect, color: Color) {
     pushQuad(rect, atlas[ATLAS_WHITE] ?: error("Atlas not found"), color)
 }
 
-fun drawText(text: String, pos: Vec2, color: UByte) {
+fun drawText(text: String, pos: Vec2, color: Color) {
     val dst = Rect(pos.x, pos.y, 0, 0)
     for (p in text) {
         if ((p.toInt() and 0xc0) == 0x80) {
@@ -148,8 +148,8 @@ fun drawText(text: String, pos: Vec2, color: UByte) {
     }
 }
 
-fun drawIcon(id: Int, rect: Rect, color: UByte) {
-    val src = atlas[id] ?: error("Atlas $id not found")
+fun drawIcon(id: Icon, rect: Rect, color: Color) {
+    val src = atlas[id.ordinal] ?: error("Atlas $id not found")
     val x = rect.x + (rect.w - src.w) / 2
     val y = rect.y + (rect.h - src.h) / 2
     pushQuad(Rect(x, y, src.w, src.h), src, color)

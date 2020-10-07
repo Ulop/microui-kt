@@ -9,14 +9,18 @@ class Vec2(var x: Int, var y: Int)
 class Rect(var x: Int, var y: Int, var w: Int, var h: Int)
 class Color(val r: UByte, val g: UByte, val b: UByte, val a: UByte)
 class PoolItem(var id: Id, var lastUpdate: Int)
+data class Buffer(var value: String)
 
 sealed class Command {
+    class BaseCommand : Command()
     class JumpCommand(var dst: Command?) : Command()
     class ClipCommand(val rect: Rect) : Command()
-    class RectCommand(val rect: Rect, val color: Color): Command()
+    class RectCommand(val rect: Rect, val color: Color) : Command()
     class TextCommand(val font: voidp, val pos: Vec2, val color: Color, val char: Char) : Command()
     class IconCommand(val rect: Rect, val id: Icon, val color: Color) : Command()
 }
+
+class CommandHolder(var comand: Command? = null)
 
 class Layout(
     val body: Rect,
@@ -71,7 +75,7 @@ class Context(
     var hoverRoot: Container? = null,
     var nextHoverRoot: Container? = null,
     var scrollTarget: Container? = null,
-    var numberEditBuf: String = "",
+    var numberEditBuf: Buffer = Buffer(""),
     var numberEdit: Id = 0U,
     /* stacks */
     val commandList: ArrayDeque<Command> = ArrayDeque(COMMAND_LIST_SIZE),
