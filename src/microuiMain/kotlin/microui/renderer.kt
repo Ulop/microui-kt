@@ -6,13 +6,14 @@ import SDL.SDL_WINDOWPOS_UNDEFINED
 import SDL.SDL_WINDOW_OPENGL
 import kotlinx.cinterop.*
 import platform.opengl32.*
+import kotlin.math.min
 import platform.opengl32.glEnable as glEnable1
 
 const val BUFFER_SIZE = 16384
-val textBuf = FloatArray(BUFFER_SIZE * 8)
+val texBuf = FloatArray(BUFFER_SIZE * 8)
 val vertBuf = FloatArray(BUFFER_SIZE * 8)
 val colorBuf = UByteArray(BUFFER_SIZE * 8)
-val indexBuff = UIntArray(BUFFER_SIZE * 8)
+val indexBuf = UIntArray(BUFFER_SIZE * 8)
 
 const val width = 800
 const val height = 600
@@ -53,4 +54,99 @@ fun init() = memScoped {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
     assert(glGetError() == 0U)
+}
+
+fun flush() = memScoped {
+    if (bufIdx == 0) {
+        return; }
+
+    glViewport(0, 0, width, height)
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    glOrtho(0.0, width.toDouble(), height.toDouble(), 0.0, -1.0, +1.0)
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+
+    glTexCoordPointer(2, GL_FLOAT, 0, texBuf.toCValues())
+    glVertexPointer(2, GL_FLOAT, 0, vertBuf.toCValues())
+    glColorPointer(4, GL_UNSIGNED_BYTE, 0, colorBuf.toCValues())
+    glDrawElements(GL_TRIANGLES, bufIdx * 6, GL_UNSIGNED_INT, indexBuf.toCValues())
+
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+
+    bufIdx = 0
+}
+
+
+fun pushQuad(dst: Rect, src: Rect, color: UByte) {
+    if (bufIdx == BUFFER_SIZE) {
+        flush(); }
+
+    val texvert_idx = bufIdx * 8
+    val color_idx = bufIdx * 16
+    val element_idx = bufIdx * 4
+    val index_idx = bufIdx * 6
+    bufIdx++
+
+    /* update texture buffer */
+    val x = src.x / ATLAS_WIDTH.toFloat()
+    val y = src.y / ATLAS_HEIGHT.toFloat()
+    val w = src.w / ATLAS_WIDTH.toFloat()
+    val h = src.h / ATLAS_HEIGHT.toFloat()
+    texBuf[texvert_idx + 0] = x
+    texBuf[texvert_idx + 1] = y
+    texBuf[texvert_idx + 2] = x + w
+    texBuf[texvert_idx + 3] = y
+    texBuf[texvert_idx + 4] = x
+    texBuf[texvert_idx + 5] = y + h
+    texBuf[texvert_idx + 6] = x + w
+    texBuf[texvert_idx + 7] = y + h
+
+    /* update vertex buffer */
+    vertBuf[texvert_idx + 0] = (dst.x).toFloat()
+    vertBuf[texvert_idx + 1] = (dst.y).toFloat()
+    vertBuf[texvert_idx + 2] = (dst.x + dst.w).toFloat()
+    vertBuf[texvert_idx + 3] = (dst.y).toFloat()
+    vertBuf[texvert_idx + 4] = (dst.x).toFloat()
+    vertBuf[texvert_idx + 5] = (dst.y + dst.h).toFloat()
+    vertBuf[texvert_idx + 6] = (dst.x + dst.w).toFloat()
+    vertBuf[texvert_idx + 7] = (dst.y + dst.h).toFloat()
+
+    /* update color buffer */
+    colorBuf[color_idx + 0] = color
+    colorBuf[color_idx + 4] = color
+    colorBuf[color_idx + 8] = color
+    colorBuf[color_idx + 12] = color
+
+    /* update index buffer */
+    val ubyteIdx = element_idx.toUByte()
+    indexBuf[index_idx + 0] = ubyteIdx + 0U
+    indexBuf[index_idx + 1] = ubyteIdx + 1U
+    indexBuf[index_idx + 2] = ubyteIdx + 2U
+    indexBuf[index_idx + 3] = ubyteIdx + 2U
+    indexBuf[index_idx + 4] = ubyteIdx + 3U
+    indexBuf[index_idx + 5] = ubyteIdx + 1U
+}
+
+fun drawRect(rect: Rect, color: UByte) {
+    pushQuad(rect, atlas[ATLAS_WHITE] ?: error("Atlas not found"), color)
+}
+
+fun drawText(text: String, pos: Vec2, color: UByte) {
+    val dst = Rect(pos.x, pos.y, 0, 0)
+    for (p in text) {
+        if ((p.toInt() and 0xc0) == 0x80) {
+            continue; }
+        val chr = min(p.toInt(), 127)
+        val src = atlas[ATLAS_FONT + chr] ?: error("Atlas ATLAS_FONT + $chr not found")
+        dst.w = src.w
+        dst.h = src.h
+        pushQuad(dst, src, color)
+        dst.x += dst.w
+    }
 }
