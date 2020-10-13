@@ -4,7 +4,8 @@ import SDL.*
 import kotlinx.cinterop.*
 import platform.opengl32.*
 import kotlin.math.min
-import platform.opengl32.glEnable as glEnable1
+
+fun get_SDL_Error() = SDL_GetError()!!.toKString()
 
 const val BUFFER_SIZE = 16384
 val texBuf = FloatArray(BUFFER_SIZE * 8)
@@ -17,6 +18,7 @@ const val height = 600
 var bufIdx = 0
 
 var window: CPointer<cnames.structs.SDL_Window>? = null
+var renderer: CPointer<cnames.structs.SDL_Renderer>? = null
 
 fun initRendere() = memScoped {
     window = SDL_CreateWindow(
@@ -25,32 +27,20 @@ fun initRendere() = memScoped {
         SDL_WINDOWPOS_UNDEFINED.convert(),
         width,
         height,
-        SDL_WINDOW_OPENGL
+        SDL_WINDOW_SHOWN or SDL_WINDOW_ALLOW_HIGHDPI
     )
-    SDL_GL_CreateContext(window)
-
-    /* init gl */
-    glEnable1(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-    glDisable(GL_CULL_FACE)
-    glDisable(GL_DEPTH_TEST)
-    glEnable1(GL_SCISSOR_TEST)
-    glEnable1(GL_TEXTURE_2D)
-    glEnableClientState(GL_VERTEX_ARRAY)
-    glEnableClientState(GL_TEXTURE_COORD_ARRAY)
-    glEnableClientState(GL_COLOR_ARRAY)
-
-    /* init texture */
-    val id: UIntVar = alloc()
-    glGenTextures(1, id.ptr)
-    glBindTexture(GL_TEXTURE_2D, id.value)
-    glTexImage2D(
-        GL_TEXTURE_2D, 0, GL_ALPHA, ATLAS_WIDTH, ATLAS_HEIGHT, 0,
-        GL_ALPHA, GL_UNSIGNED_BYTE, atlasTexture.toCValues()
-    )
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-    assert(glGetError() == 0U)
+    if (window == null) {
+        println("SDL_CreateWindow Error: ${get_SDL_Error()}")
+        SDL_Quit()
+        throw Error()
+    }
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED or SDL_RENDERER_PRESENTVSYNC)
+    if (renderer == null) {
+        SDL_DestroyWindow(window)
+        println("SDL_CreateRenderer Error: ${get_SDL_Error()}")
+        SDL_Quit()
+        throw Error()
+    }
 }
 
 fun flush() = memScoped {
@@ -82,7 +72,9 @@ fun flush() = memScoped {
 
 fun pushQuad(dst: Rect, src: Rect, color: Color) {
     if (bufIdx == BUFFER_SIZE) {
-        flush(); }
+        println("flush")
+        flush()
+    }
 
     val texvert_idx = bufIdx * 8
     val color_idx = bufIdx * 16
@@ -91,10 +83,10 @@ fun pushQuad(dst: Rect, src: Rect, color: Color) {
     bufIdx++
 
     /* update texture buffer */
-    val x = src.x / ATLAS_WIDTH.toFloat()
-    val y = src.y / ATLAS_HEIGHT.toFloat()
-    val w = src.w / ATLAS_WIDTH.toFloat()
-    val h = src.h / ATLAS_HEIGHT.toFloat()
+    val x = src.x.toFloat() // / ATLAS_WIDTH.toFloat()
+    val y = src.y.toFloat() // / ATLAS_HEIGHT.toFloat()
+    val w = src.w.toFloat() // / ATLAS_WIDTH.toFloat()
+    val h = src.h.toFloat() // / ATLAS_HEIGHT.toFloat()
     texBuf[texvert_idx + 0] = x
     texBuf[texvert_idx + 1] = y
     texBuf[texvert_idx + 2] = x + w
@@ -128,41 +120,61 @@ fun pushQuad(dst: Rect, src: Rect, color: Color) {
     indexBuf[index_idx + 3] = ubyteIdx + 2U
     indexBuf[index_idx + 4] = ubyteIdx + 3U
     indexBuf[index_idx + 5] = ubyteIdx + 1U
+    println("Quad pushed")
 }
 
+private fun stretch(value: Int) = (value.toFloat() * 1 + 0.5).toInt()
+
 fun drawRect(rect: Rect, color: Color) {
-    pushQuad(rect, atlas[ATLAS_WHITE] ?: error("Atlas not found"), color)
+    println("Render $rect with $color")
+    /// pushQuad(rect.copy(w = 20), atlas[ATLAS_WHITE] ?: error("Atlas not found"), color)
+    val (r, g, b, a) = color
+    SDL_SetRenderDrawColor(renderer, r, g, b, a)
+    memScoped {
+        val stretchedRect = alloc<SDL_Rect>()
+        stretchedRect.w = (rect.w)
+        stretchedRect.h = (rect.h)
+        stretchedRect.x = (rect.x)
+        stretchedRect.y = (rect.y)
+        SDL_RenderFillRect(renderer, stretchedRect.ptr.reinterpret())
+    }
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE.toUByte())
 }
 
 fun drawText(text: String, pos: Vec2, color: Color) {
+    println("render text $text")
     val dst = Rect(pos.x, pos.y, 0, 0)
-    for (p in text) {
-        if ((p.toInt() and 0xc0) == 0x80) {
-            continue; }
-        val chr = min(p.toInt(), 127)
-        val src = atlas[ATLAS_FONT + chr] ?: error("Atlas ATLAS_FONT + $chr not found")
-        dst.w = src.w
-        dst.h = src.h
-        pushQuad(dst, src, color)
-        dst.x += dst.w
-    }
+/*for (p in text) {
+    if ((p.toInt() and 0xc0) == 0x80) {
+        continue; }
+    val chr = min(p.toInt(), 127)
+    println("Char code $chr")
+    val src = atlas[ATLAS_FONT + chr] ?: error("Atlas ATLAS_FONT + $chr not found")
+    println(src)
+    dst.w = src.w
+    dst.h = src.h
+    pushQuad(dst, src, color)
+    dst.x += dst.w
+}*/
 }
 
 fun drawIcon(id: Icon, rect: Rect, color: Color) {
-    val src = atlas[id.ordinal] ?: error("Atlas $id not found")
-    val x = rect.x + (rect.w - src.w) / 2
-    val y = rect.y + (rect.h - src.h) / 2
-    pushQuad(Rect(x, y, src.w, src.h), src, color)
+/*val src = atlas[id.ordinal] ?: error("Atlas $id not found")
+val x = rect.x + (rect.w - src.w) / 2
+val y = rect.y + (rect.h - src.h) / 2
+pushQuad(Rect(x, y, src.w, src.h), src, color)*/
 }
 
 fun getTextWidth(text: String): Int {
+    println(text + "length ${text.length}")
     var res = 0
     for (p in text) {
-        if ((p.toInt() and 0xc0) == 0x80) {
-            continue; }
+        if ((p.toInt() and 0xc0) == 0x80 || p.toInt() == 0) {
+            continue
+        }
         val chr = min(p.toInt(), 127)
-        val rect = atlas[ATLAS_FONT + chr] ?: error("Atlas ATLAS_FONT + $chr not found")
-        res += rect.w
+        /*val rect = atlas[ATLAS_FONT + chr] ?: error("Atlas ATLAS_FONT + $chr not found")
+        res += rect.w*/
     }
     return res
 }

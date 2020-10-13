@@ -1,9 +1,7 @@
 package microui
 
-import kotlinx.cinterop.ByteVar
-import kotlinx.cinterop.allocArray
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.toKString
+import getTicks
+import kotlinx.cinterop.*
 import platform.posix.sprintf
 import kotlin.math.max
 import kotlin.math.min
@@ -35,13 +33,14 @@ val defaultStyle = Style(
 )
 
 infix fun Int.has(opt: Opt) = this and opt.value == opt.value
+infix fun Int.has(opt: Int) = this and opt == opt
 infix fun Int.or(opt: Opt) = this or opt.value
 
-fun String.format(vararg args: Any): String {
+fun String.format(vararg args: Int): String {
     var result = ""
     memScoped {
         val temp = allocArray<ByteVar>(255)
-        sprintf(temp, this@format, args)
+        sprintf(temp, this@format, cValuesOf(*args))
         result = temp.toKString()
     }
     return result
@@ -69,16 +68,14 @@ fun rectOverlapsVec2(r: Rect, p: Vec2): Boolean {
     return p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h
 }
 
-fun compareZIndex(a: Container, b: Container): Int {
-    return a.zIndex - b.zIndex
-}
-
 fun drawFrame(context: Context, rect: Rect, color: Colors) {
     drawRect(context, rect, context.style.colors[color.ordinal])
     if (color == Colors.SCROLL_BASE ||
-            color == Colors.SCROLL_THUMB ||
-            color == Colors.TITLE_BG) {
-        return; }
+        color == Colors.SCROLL_THUMB ||
+        color == Colors.TITLE_BG
+    ) {
+        return
+    }
     /* draw border */
     if (context.style.colors[Colors.BORDER.ordinal].a.toInt() != 0) {
         drawBox(context, expandRect(rect, 1), context.style.colors[Colors.BORDER.ordinal])
@@ -86,10 +83,10 @@ fun drawFrame(context: Context, rect: Rect, color: Colors) {
 }
 
 fun initContext(): Context {
-    return Context(
-            drawFrame = ::drawFrame,
-            style = defaultStyle
-    )
+    return Context(drawFrame = ::drawFrame, style = defaultStyle).apply {
+        frame = getTicks()
+        containerPool.onEach { it.lastUpdate = getTicks() }
+    }
 }
 
 fun begin(context: Context) {
@@ -104,6 +101,7 @@ fun begin(context: Context) {
 }
 
 fun end(context: Context) {
+    println("End")
     var n = 0
     /* check stacks */
     require(context.containerStack.isEmpty())
@@ -127,10 +125,10 @@ fun end(context: Context) {
     /* bring hover root to front if mouse was pressed */
     val nextHoverRoot = context.nextHoverRoot
     if (
-            context.mousePressed != Mouse.NONE &&
-            nextHoverRoot != null &&
-            nextHoverRoot.zIndex < context.lastZIndex &&
-            nextHoverRoot.zIndex >= 0
+        context.mousePressed != Mouse.NONE &&
+        nextHoverRoot != null &&
+        nextHoverRoot.zIndex < context.lastZIndex &&
+        nextHoverRoot.zIndex >= 0
     ) {
         bringToFront(context, nextHoverRoot)
     }
@@ -146,22 +144,6 @@ fun end(context: Context) {
     context.rootList.sortBy { it.zIndex }
 
     /* set root container jump commands */
-    for (i in 0..context.rootList.lastIndex) {
-        val container = context.rootList[i]
-        /*if this is the first container then make the first command jump to it.
-       ** otherwise set the previous container's tail to jump to this one */
-        if (i == 0) {
-            val cmd = context.commandList.first()
-            (cmd as Command.JumpCommand).dst = container.head
-        } else {
-            val prev = context.rootList[i - 1]
-            (prev.tail as Command.JumpCommand).dst = container.head
-        }
-        // make the last container 's tail jump to the end of command list
-        if (i == context.rootList.lastIndex) {
-            (container.tail as Command.JumpCommand).dst = context.commandList.last()
-        }
-    }
 }
 
 fun bringToFront(context: Context, container: Container) {
@@ -212,19 +194,23 @@ fun popClipRect(context: Context) {
 fun checkClip(context: Context, rect: Rect): Clip {
     val cr = getClipRect(context)
     if (rect.x > cr.x + cr.w || rect.x + rect.w < cr.x ||
-            rect.y > cr.y + cr.h || rect.y + rect.h < cr.y) {
+        rect.y > cr.y + cr.h || rect.y + rect.h < cr.y
+    ) {
         return Clip.ALL; }
     if (rect.x >= cr.x && rect.x + rect.w <= cr.x + cr.w &&
-            rect.y >= cr.y && rect.y + rect.h <= cr.y + cr.h) {
+        rect.y >= cr.y && rect.y + rect.h <= cr.y + cr.h
+    ) {
         return Clip.NONE; }
     return Clip.PART
 }
 
 fun pushLayout(context: Context, body: Rect, scroll: Vec2) {
-    context.layoutStack.add(Layout(
+    context.layoutStack.add(
+        Layout(
             body = Rect(body.x - scroll.x, body.y - scroll.y, body.w, body.h),
             max = Vec2(-0x1000000, -0x1000000)
-    ))
+        )
+    )
 }
 
 fun getLayout(context: Context) = context.layoutStack.last()
@@ -245,24 +231,30 @@ fun popContainer(context: Context) {
 }
 
 fun getContainer(context: Context, id: Id, opt: Int): Container? {
-    context.containerPool ?: return null
+    if (context.containerPool == null) {
+        println("Container pool doesn't exist")
+    }
+    context.containerPool
 
     var container: Container? = null
     /* try to get existing container from pool */
     var idx = poolGet(context, context.containerPool, id)
     if (idx >= 0) {
-        if (context.containers?.get(idx)?.open == true || opt has Opt.CLOSED) {
+        println("idx $idx, ")
+        if (context.containers.get(idx).open == true || opt has Opt.CLOSED) {
             poolUpdate(context, context.containerPool, idx)
         }
-        return context.containers?.get(idx)
+        return context.containers.get(idx)
     }
     if (opt has Opt.CLOSED) {
+        println("Opt is closed")
         return null
     }
 
     /* container not found in pool: init new container */
     idx = initPool(context, context.containerPool, CONTAINER_POOL_SIZE, id)
-    container = context.containers?.get(idx) ?: return null
+    println("idx $idx")
+    container = context.containers.get(idx)
     container.open = true
     bringToFront(context, container)
 
@@ -279,12 +271,13 @@ fun getContainer(context: Context, name: String) =
 fun initPool(context: Context, items: Array<PoolItem>, length: Int, id: Id): Int {
     var n = -1
     var f = context.frame
-    for (i in 0..length) {
-        if (items[i].lastUpdate < f) {
+    for (i in 0..length - 1) {
+        if (items[i].lastUpdate <= f) {
             f = items[i].lastUpdate
             n = i
         }
     }
+    println("n is $n")
     require(n > -1)
     items[n].id = id
     poolUpdate(context, items, n)
@@ -292,7 +285,7 @@ fun initPool(context: Context, items: Array<PoolItem>, length: Int, id: Id): Int
 }
 
 fun poolGet(context: Context, items: Array<PoolItem>, id: Id) =
-        items.indexOfFirst { it.id == id }
+    items.indexOfFirst { it.id == id }
 
 fun poolUpdate(context: Context, items: Array<PoolItem>, id: Int) {
     items[id].lastUpdate = context.frame
@@ -343,7 +336,8 @@ fun inputText(context: Context, text: String) {
 **============================================================================*/
 
 fun pushCommand(context: Context, cmd: Command): Command {
-    require(context.commandList.size < COMMAND_LIST_SIZE)
+    println("Command pushed: $cmd")
+    //require(context.commandList.size < COMMAND_LIST_SIZE)
     context.commandList.addLast(cmd)
     return cmd
 }
@@ -351,14 +345,20 @@ fun pushCommand(context: Context, cmd: Command): Command {
 
 fun nextCommand(context: Context, holder: CommandHolder): Int {
     if (holder.comand != null) {
-        holder.comand = Command.BaseCommand()
+        holder.comand =
+            context.commandList[context.commandList.indexOf(holder.comand) + 1]
     } else {
-        holder.comand = context.commandList.last()
+        holder.comand = context.commandList.firstOrNull()
     }
 
     val commands = context.commandList
+    //println("Command count: ${commands.size}")
     for (command in commands) {
-        if (command !is Command.JumpCommand) return 1
+        if (command !is Command.JumpCommand) {
+            holder.comand = command
+            context.commandList.removeFirst()
+            return 1
+        }
         holder.comand = command.dst
     }
     return 0
@@ -390,12 +390,12 @@ fun drawBox(context: Context, rect: Rect, color: Color) {
     drawRect(context, Rect(rect.x + rect.w - 1, rect.y, 1, rect.h), color)
 }
 
-fun drawText(context: Context, font: Font, text: String, pos: Vec2, color: Color) {
+fun drawText(context: Context, font: Font?, text: String, pos: Vec2, color: Color) {
     val rect = Rect(
-            pos.x,
-            pos.y,
-            context.textWidth(font, text),
-            context.textHeight(font)
+        pos.x,
+        pos.y,
+        context.textWidth(font, text),
+        context.textHeight(font)
     )
 
     val clipped = checkClip(context, rect)
@@ -406,7 +406,7 @@ fun drawText(context: Context, font: Font, text: String, pos: Vec2, color: Color
         setClip(context, getClipRect(context))
     }
     /* add command */
-    pushCommand(context, Command.TextCommand(font, pos, color, '0'))
+    pushCommand(context, Command.TextCommand(font, pos, color, text))
 
     /* reset clipping if it was set */
     if (clipped != Clip.NONE) {
@@ -503,10 +503,10 @@ fun layoutNext(context: Context): Rect {
         }
 
         res = Rect(
-                position?.x ?: 0,
-                position?.y ?: 0,
-                if (layout.widths.isNotEmpty()) layout.widths.last() else layout.size?.x ?: 0,
-                layout.size?.y ?: 0
+            position?.x ?: 0,
+            position?.y ?: 0,
+            if (layout.widths.isNotEmpty()) layout.widths.last() else layout.size?.x ?: 0,
+            layout.size?.y ?: 0
         )
         if (res.w == 0) {
             res.w = style.size.x + style.padding * 2
@@ -570,7 +570,7 @@ fun drawControlFrame(context: Context, id: Id, rect: Rect, color: Colors, opt: I
 
 fun drawControlText(context: Context, str: String, rect: Rect, color: Colors, opt: Int) {
     val font = context.style.font
-    val tw = context.textWidth(font!!, str)
+    val tw = context.textWidth(font, str)
     pushClipRect(context, rect)
     val posY = rect.y + (rect.h - context.textHeight(font)) / 2
     val posX = when {
@@ -621,9 +621,10 @@ fun updateControl(context: Context, id: Id, rect: Rect, opt: Int) {
 
 
 fun text(context: Context, text: String) {
+    println("Text: $text")
     var p = text
     val width = -1
-    val font = context.style.font!!
+    val font = context.style.font
     val color = context.style.colors[Colors.TEXT.ordinal]
     layoutBeginColumn(context)
     layoutRow(context, intArrayOf(width), context.textHeight(font))
@@ -643,7 +644,7 @@ fun text(context: Context, text: String) {
             }
             w += context.textWidth(font, p)
             end = p.drop(1)
-        } while (end != "\n")
+        } while (end != "\n" || end != "")
         drawText(context, font, start, Vec2(r.x, r.y), color)
         p = end + 1
     } while (end.isNotEmpty())
@@ -652,6 +653,7 @@ fun text(context: Context, text: String) {
 
 
 fun label(context: Context, text: String) {
+    println("Label $text")
     drawControlText(context, text, layoutNext(context), Colors.TEXT, 0)
 }
 
@@ -732,7 +734,7 @@ fun textBoxRaw(context: Context, buffer: Buffer, bufferSize: Int, id: Id, rect: 
     drawControlFrame(context, id, rect, Colors.BASE, opt)
     if (context.focus == id) {
         val color = context.style.colors[Colors.TEXT.ordinal]
-        val font = context.style.font!!
+        val font = context.style.font
         val textw = context.textWidth(font, buffer.value)
         val texth = context.textHeight(font)
         val ofx = rect.w - context.style.padding - textw - 1
@@ -787,7 +789,8 @@ fun sliderEx(context: Context, value: Float, low: Float, high: Float, step: Floa
 
     /* handle input */
     if (context.focus == id &&
-            (context.mouseDown.value or context.mousePressed.value) == Mouse.LEFT.value) {
+        (context.mouseDown.value or context.mousePressed.value) == Mouse.LEFT.value
+    ) {
         v = low + (context.mousePos.x - base.x) * (high - low) / base.w
         if (step != 0f) {
             v = (((v + step / 2) / step)) * step; }
@@ -852,7 +855,7 @@ fun numberEx(context: Context, value: Float, step: Float, fmt: String, opt: Int)
 
 fun headerInner(context: Context, label: String, isTreeNode: Boolean, opt: Int): Res {
     val id = getId(context, label)
-    val idx = poolGet(context, context.treeNodePool!!, id)
+    val idx = poolGet(context, context.treeNodePool, id)
     val width = -1
     layoutRow(context, intArrayOf(1), width)
 
@@ -868,7 +871,7 @@ fun headerInner(context: Context, label: String, isTreeNode: Boolean, opt: Int):
     if (idx >= 0) {
         if (active) {
             poolUpdate(context, context.treeNodePool, idx); } else {
-            context.treeNodePool[idx] = PoolItem(0U, 0)
+            context.treeNodePool[idx] = PoolItem(0U, getTicks())
         }
     } else if (active) {
         initPool(context, context.treeNodePool, TREE_NODE_POOL_SIZE, id)
@@ -882,8 +885,9 @@ fun headerInner(context: Context, label: String, isTreeNode: Boolean, opt: Int):
         drawControlFrame(context, id, r, Colors.BUTTON, 0)
     }
     drawIcon(
-            context, if (expanded) Icon.EXPANDED else Icon.COLLAPSED,
-            Rect(r.x, r.y, r.h, r.h), context.style.colors[Colors.TEXT.ordinal])
+        context, if (expanded) Icon.EXPANDED else Icon.COLLAPSED,
+        Rect(r.x, r.y, r.h, r.h), context.style.colors[Colors.TEXT.ordinal]
+    )
     r.x += r.h - context.style.padding
     r.w -= r.h - context.style.padding
     drawControlText(context, label, r, Colors.TEXT, 0)
@@ -984,7 +988,7 @@ fun beginRootContainer(context: Context, container: Container) {
     /* set as hover root if the mouse is overlapping this container and it has a
     ** higher zindex than the current hover root */
     if (rectOverlapsVec2(container.rect, context.mousePos) &&
-            (context.nextHoverRoot == null || container.zIndex > context.nextHoverRoot!!.zIndex)
+        (context.nextHoverRoot == null || container.zIndex > context.nextHoverRoot!!.zIndex)
     ) {
         context.nextHoverRoot = container
     }
@@ -1000,8 +1004,10 @@ fun endRootContainer(context: Context) {
     ** on initing these are done in mu_end() */
     val container = getCurrentContainer(context)
     container.tail = pushJump(context, null)
-    if (container.head is Command.JumpCommand)
-        (container.head as Command.JumpCommand).dst = context.commandList.last()
+    if (container.head is Command.JumpCommand) {
+        println("Head is Jump")
+        (container.head as Command.JumpCommand).dst = context.commandList.firstOrNull()
+    }
     /* pop base clip rect and container */
     popClipRect(context)
     popContainer(context)
@@ -1012,6 +1018,7 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Int): Res {
     val id = getId(context, title)
     val container = getContainer(context, id, opt)
     if (container == null || !container.open) {
+        println("Fuck! container is null")
         return Res.NONE
     }
     context.idStack.addLast(id)
@@ -1021,19 +1028,19 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Int): Res {
     beginRootContainer(context, container)
     val body = container.rect
 
-    /* draw frame */
     if (opt.inv() has Opt.NO_FRAME) {
+        println(" draw frame ")
         context.drawFrame(context, rect, Colors.WINDOW_BG)
     }
 
-    /* do title bar */
     if (opt.inv() has Opt.NO_TITLE) {
+        println(" do title bar ")
         val tr = rect
         tr.h = context.style.title_height
         context.drawFrame(context, tr, Colors.TITLE_BG)
 
-        /* do title text */
         if (opt.inv() has Opt.NO_TITLE) {
+            println(" do title text ")
             val id = getId(context, "!title")
             updateControl(context, id, tr, opt)
             drawControlText(context, title, tr, Colors.TITLE_TEXT, opt)
@@ -1041,12 +1048,12 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Int): Res {
                 container.rect.x += context.mouseDelta.x
                 container.rect.y += context.mouseDelta.y
             }
-            body.y += tr.h
-            body.h -= tr.h
+            /* body.y += tr.h
+             body.h -= tr.h*/
         }
 
-        /* do `close` button */
         if (opt.inv() has Opt.NO_CLOSE) {
+            println(" do `close` button ")
             val id = getId(context, "!close")
             val r = Rect(tr.x + tr.w - tr.h, tr.y, tr.h, tr.h)
             tr.w -= r.w
@@ -1060,8 +1067,8 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Int): Res {
 
     pushContainerBody(context, container, body, opt)
 
-    /* do `resize` handle */
     if (opt.inv() has Opt.NO_RESIZE) {
+        println(" do `resize` handle ")
         val sz = context.style.title_height
         val id = getId(context, "!resize")
         val r = Rect(rect.x + rect.w - sz, rect.y + rect.h - sz, sz, sz)
@@ -1072,15 +1079,15 @@ fun beginWindowEx(context: Context, title: String, rect: Rect, opt: Int): Res {
         }
     }
 
-    /* resize to content size */
     if (opt has Opt.AUTO_SIZE) {
+        println(" resize to content size ")
         val r = getLayout(context).body
         container.rect.w = container.contentSize.x + (container.rect.w - r.w)
         container.rect.h = container.contentSize.y + (container.rect.h - r.h)
     }
 
-    /* close if this is a popup window and elsewhere was clicked */
     if (opt has Opt.POPUP && context.mousePressed != Mouse.NONE && context.hoverRoot != container) {
+        println(" close if this is a popup window and elsewhere was clicked ")
         container.open = false
     }
 
@@ -1093,6 +1100,7 @@ fun beginTreeNode(ctx: Context, label: String) = beginTreeNodeEx(ctx, label, 0)
 fun beginWindow(context: Context, title: String, rect: Rect) = beginWindowEx(context, title, rect, 0)
 
 fun endWindow(context: Context) {
+    println("End window")
     popClipRect(context)
     endRootContainer(context)
 }

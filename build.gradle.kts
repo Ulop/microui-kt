@@ -56,10 +56,6 @@ kotlin {
         }
     }
     sourceSets {
-        val microuiMain by getting {
-            dependencies {
-                implementation("org.jetbrains.kotlin:kotlin-stdlib")
-            }
-        }
+        val microuiMain by getting
     }
 }

@@ -5,10 +5,10 @@ import platform.zlib.voidp
 typealias Id = UInt
 typealias Font = voidp
 
-class Vec2(var x: Int, var y: Int)
-class Rect(var x: Int, var y: Int, var w: Int, var h: Int)
-class Color(val r: UByte, val g: UByte, val b: UByte, val a: UByte)
-class PoolItem(var id: Id, var lastUpdate: Int)
+data class Vec2(var x: Int, var y: Int)
+data class Rect(var x: Int, var y: Int, var w: Int, var h: Int)
+data class Color(val r: UByte, val g: UByte, val b: UByte, val a: UByte)
+class PoolItem(var id: Id, var lastUpdate: UInt)
 data class Buffer(var value: String)
 
 sealed class Command {
@@ -16,7 +16,7 @@ sealed class Command {
     class JumpCommand(var dst: Command?) : Command()
     class ClipCommand(val rect: Rect) : Command()
     class RectCommand(val rect: Rect, val color: Color) : Command()
-    class TextCommand(val font: voidp, val pos: Vec2, val color: Color, val char: Char) : Command()
+    data class TextCommand(val font: Font?, val pos: Vec2, val color: Color, val str: String) : Command()
     class IconCommand(val rect: Rect, val id: Icon, val color: Color) : Command()
 }
 
@@ -37,12 +37,12 @@ class Layout(
 
 class Container(
     var head: Command? = null,
-    var tail: Command,
-    var rect: Rect,
-    var body: Rect,
-    val contentSize: Vec2,
-    val scroll: Vec2,
-    var zIndex: Int,
+    var tail: Command? = null,
+    var rect: Rect = UNCLIPPED_RECT,
+    var body: Rect = UNCLIPPED_RECT,
+    val contentSize: Vec2 = Vec2(0, 0),
+    val scroll: Vec2 = Vec2(0, 0),
+    var zIndex: Int = 0,
     var open: Boolean = false
 )
 
@@ -60,8 +60,8 @@ class Style(
 
 class Context(
     /* callbacks */
-    var textWidth: (font: Font, text: String) -> Int = { _, _ -> 0 },
-    var textHeight: ((font: Font) -> Int) = { _ -> 0 },
+    var textWidth: (font: Font?, text: String) -> Int = { _, _ -> 0 },
+    var textHeight: ((font: Font?) -> Int) = { _ -> 0 },
     var drawFrame: ((ctx: Context, rect: Rect, color: Colors) -> Unit) = { _, _, _ -> },
     /* core state */
     val style: Style,
@@ -71,7 +71,7 @@ class Context(
     var lastRect: Rect = UNCLIPPED_RECT,
     var lastZIndex: Int = 0,
     var updatedFocus: Int = 0,
-    var frame: Int = 0,
+    var frame: UInt = 0U,
     var hoverRoot: Container? = null,
     var nextHoverRoot: Container? = null,
     var scrollTarget: Container? = null,
@@ -85,9 +85,9 @@ class Context(
     val idStack: ArrayDeque<Id> = ArrayDeque(ID_STACK_SIZE),
     val layoutStack: ArrayDeque<Layout> = ArrayDeque(LAYOUT_STACK_SIZE),
     /* retained state pools */
-    val containerPool: Array<PoolItem>? = null,
-    val containers: Array<Container>? = null,
-    val treeNodePool: Array<PoolItem>? = null,
+    val containerPool: Array<PoolItem> = Array(CONTAINER_POOL_SIZE) { PoolItem(0U, 0U) },
+    val containers: Array<Container> = Array(CONTAINER_POOL_SIZE) { Container() },
+    val treeNodePool: Array<PoolItem> = Array(TREE_NODE_POOL_SIZE) { PoolItem(0U, 0U) },
     /* input state */
     var mousePos: Vec2 = Vec2(0, 0),
     var lastMousePos: Vec2 = Vec2(0, 0),
