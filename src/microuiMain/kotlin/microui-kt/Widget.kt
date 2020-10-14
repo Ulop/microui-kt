@@ -38,13 +38,11 @@ abstract class Container(val childs: MutableList<Widget>, id: Int) : Widget(id) 
 
     fun layoutChilds() {
         positions = calcChildPositions()
-        println(positions)
         childs.forEachIndexed { index, widget ->
             if (widget is Container) {
                 widget.layoutChilds()
             }
             widget.setAbsolutePosition(positions[index] + absolutePosition)
-            println("$widget")
         }
     }
 
@@ -114,7 +112,7 @@ class Row(childs: MutableList<Widget>, id: Int) : Container(childs, id) {
     }
 }
 
-class Box : Widget(666) {
+class Box(id: Int) : Widget(id) {
     override fun getWidth() = 200
 
     override fun getHeight() = 80
@@ -126,7 +124,7 @@ class Box : Widget(666) {
     }
 }
 
-abstract class StatefulWidget<State> : Widget(555) {
+abstract class StatefulWidget<State>(id: Int) : Widget(id) {
     abstract var state: State
 }
 
@@ -141,19 +139,21 @@ interface MouseListener {
 }
 
 
-class Button : StatefulWidget<WidgetState>(), MouseListener {
+class Button(id: Int) : StatefulWidget<WidgetState>(id), MouseListener {
     override var state = WidgetState(hovered = false, pressed = false)
 
     override fun getWidth() = 180
 
     override fun getHeight() = 60
 
-    override fun onMouseMove(event: MouseEvent.Move) {
-        super.onMouseMove(event)
-        if (!state.hovered) {
-            state = state.copy(hovered = true)
-            //println("$body $state")
-        }
+    override fun onMouseEnter() {
+        super.onMouseEnter()
+        state = state.copy(hovered = true)
+    }
+
+    override fun onMouseLeave() {
+        super.onMouseLeave()
+        state = state.copy(hovered = false)
     }
 
     override fun draw(context: Context, position: Position) {

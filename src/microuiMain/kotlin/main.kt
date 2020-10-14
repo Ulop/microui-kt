@@ -6,23 +6,25 @@ fun main() {
         {
             Column(
                 mutableListOf(
+                    Box(id),
                     Row(
                         mutableListOf(
-                            Button(),
-                            Button()
+                            Button(id),
+                            Button(id),
+                            Box(id)
                         ),
-                        222
+                        id
                     ),
                     Row(
                         mutableListOf(
-                            Button(),
-                            Button(),
-                            Button()
+                            Button(id),
+                            Button(id),
+                            Button(id)
                         ),
-                        222
+                        id
                     )
                 ),
-                111
+                id
             )
         },
         Position(10, 10),
