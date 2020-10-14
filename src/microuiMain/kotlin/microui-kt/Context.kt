@@ -24,15 +24,13 @@ class Context(
     private val visualizer: Visualizer
 ) {
     private val commands: ArrayDeque<DrawCommand> = ArrayDeque()
-    private val oldCommands = ArrayDeque<DrawCommand>()
 
     fun pushRect(rect: Rect, color: Color) = commands.addLast(DrawCommand.DrawRect(rect, color))
 
     fun mainLoop(): Boolean {
         val root = getRoot()
-
+        root.setAbsolutePosition(position)
         root.layoutChilds()
-        root.draw(this, position)
 
         val userCommands = visualizer.readCommands()
         for (cmd in userCommands) {
@@ -45,13 +43,16 @@ class Context(
                         is MouseEvent.Up -> {
                         }
                         is MouseEvent.Move -> {
+                            //println(cmd.event.position)
+                            val (posX, posY) = cmd.event.position
                             walkTree(root) {
-                                val (posX, posY) = cmd.event.position
                                 if (it is MouseListener) {
-                                    println("Mouse listener ${it.body}")
                                     val (x, y, w, h) = it.body
                                     val intersect = x <= posX && posX <= x + w && y <= posY && posY <= y + h
-                                    if (intersect) it.onMouseMove(MouseEvent.Move(cmd.event.position))
+                                    println("Mouse listener ${it.body}, mouse: ($posX, $posY)")
+                                    if (intersect) {
+                                        it.onMouseMove(MouseEvent.Move(cmd.event.position))
+                                    }
                                 }
                                 false
                             }
@@ -61,7 +62,6 @@ class Context(
             }
         }
 
-        root.layoutChilds()
         root.draw(this, position)
 
         visualizer.draw {
