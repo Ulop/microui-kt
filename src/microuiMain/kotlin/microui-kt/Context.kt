@@ -32,7 +32,7 @@ class Context(
     private var hoveredId = -1
     private var lastHoveredId = -1
 
-    fun pushRect(rect: Rect, color: Color) = commands.addLast(DrawCommand.DrawRect(rect, color))
+    fun pushDrawCommand(command: DrawCommand) = commands.addLast(command)
 
     fun mainLoop(): Boolean {
         val root = getRoot()
@@ -102,7 +102,7 @@ class Context(
             }
             false
         }
-        root.draw(this, position)
+        root.draw(this)
 
         visualizer.draw {
             for (command in commands) {

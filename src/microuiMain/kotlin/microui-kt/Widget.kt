@@ -1,6 +1,7 @@
 package `microui-kt`
 
 data class Position(val x: Int, val y: Int)
+
 private operator fun Position.plus(parentPosition: Position): Position {
     return copy(x = x + parentPosition.x, y = y + parentPosition.y)
 }
@@ -15,18 +16,33 @@ sealed class MouseEvent(val position: Position) {
     class Move(position: Position) : MouseEvent(position)
 }
 
-
-abstract class Widget(val id: Int = 0) {
-    protected var absolutePosition = Position(0, 0)
+abstract class Widget(val id: Int = 0) : WidgetDrawer {
+    override var absolutePosition = Position(0, 0)
     val body: Rect
         get() = Rect(absolutePosition.x, absolutePosition.y, getWidth(), getHeight())
 
     abstract fun getWidth(): Int
     abstract fun getHeight(): Int
-    abstract fun draw(context: Context, position: Position)
+    abstract fun draw(context: Context)
 
     internal open fun setAbsolutePosition(position: Position) {
         this.absolutePosition = position
+    }
+}
+
+interface WidgetDrawer {
+    var absolutePosition: Position
+
+    fun Context.pushRect(rect: Rect, color: Color) = pushDrawCommand(DrawCommand.DrawRect(rect, color))
+
+    fun Context.drawRect(rect: Rect, color: Color) {
+        this.pushRect(
+            rect.copy(
+                x = rect.x + absolutePosition.x,
+                y = rect.y + absolutePosition.y
+            ),
+            color
+        )
     }
 }
 
@@ -55,14 +71,8 @@ abstract class Container(val childs: MutableList<Widget>, id: Int) : Widget(id) 
         }
     }
 
-    override fun draw(context: Context, position: Position) {
-        val (x, y) = position
-        positions.forEachIndexed { i, pos ->
-            childs[i].draw(
-                context,
-                pos.copy(x = pos.x + x, y = pos.y + y)
-            )
-        }
+    override fun draw(context: Context) {
+        childs.forEach { it.draw(context) }
     }
 }
 
@@ -117,10 +127,9 @@ class Box(id: Int) : Widget(id) {
 
     override fun getHeight() = 80
 
-    override fun draw(context: Context, position: Position) {
-        val (x, y) = position
-        context.pushRect(Rect(x, y, getWidth(), getHeight()), Color(19U, 19U, 19U))
-        context.pushRect(Rect(x + 2, y + 2, getWidth() - 2, getHeight() - 2), Color(32U, 32U, 32U))
+    override fun draw(context: Context) {
+        context.drawRect(Rect(0, 0, getWidth(), getHeight()), Color(19U, 19U, 19U))
+        context.drawRect(Rect(2, 2, getWidth() - 2, getHeight() - 2), Color(32U, 32U, 32U))
     }
 }
 
@@ -156,12 +165,11 @@ class Button(id: Int) : StatefulWidget<WidgetState>(id), MouseListener {
         state = state.copy(hovered = false)
     }
 
-    override fun draw(context: Context, position: Position) {
-        val (x, y) = position
-        context.pushRect(Rect(x, y, getWidth(), getHeight()), Color(19U, 19U, 19U))
+    override fun draw(context: Context) {
+        context.drawRect(Rect(0, 0, getWidth(), getHeight()), Color(19U, 19U, 19U))
 
         val colorValue: UByte = if (state.hovered) 76U else 32U
-        context.pushRect(Rect(x + 2, y + 2, getWidth() - 2, getHeight() - 2), Color(colorValue, colorValue, colorValue))
+        context.drawRect(Rect(0 + 2, 0 + 2, getWidth() - 2, getHeight() - 2), Color(colorValue, colorValue, colorValue))
     }
 
     override fun toString(): String {
