@@ -51,44 +51,7 @@ class Context(
                         }
                         is MouseEvent.Move -> {
                             //println(cmd.event.position)
-                            val (posX, posY) = cmd.event.position
-                            var intersectCount = 0
-                            walkTree(root) {
-                                if (it is MouseListener) {
-                                    val (x, y, w, h) = it.body
-                                    val intersect = x <= posX && posX <= x + w && y <= posY && posY <= y + h
-                                    if (intersect) {
-                                        intersectCount++
-                                        it.onMouseMove(MouseEvent.Move(cmd.event.position))
-                                        if (hoveredId != it.id) {
-                                            lastHoveredId = hoveredId
-                                            hoveredId = it.id
-                                        }
-                                    }
-                                }
-                                false
-                            }
-                            if (intersectCount == 0) {
-                                lastHoveredId = -1
-                                walkTree(root) {
-                                    if (it is MouseListener && hoveredId == it.id) {
-                                        it.onMouseLeave()
-                                        println("Leave #1 $it $hoveredId")
-                                        hoveredId = -1
-                                        return@walkTree true
-                                    }
-                                    false
-                                }
-                            } else {
-                                walkTree(root) {
-                                    if (it is MouseListener && lastHoveredId == it.id) {
-                                        it.onMouseLeave()
-                                        println("Leave #2 $it $hoveredId")
-                                        return@walkTree true
-                                    }
-                                    false
-                                }
-                            }
+                            onMouseMove(cmd.event, root)
                         }
                     }
                 }
@@ -114,6 +77,47 @@ class Context(
 
         _id = 0
         return true
+    }
+
+    private fun onMouseMove(event: MouseEvent.Move, root: Container) {
+        val (posX, posY) = event.position
+        var intersectCount = 0
+        walkTree(root) {
+            if (it is MouseListener) {
+                val (x, y, w, h) = it.body
+                val intersect = x <= posX && posX <= x + w && y <= posY && posY <= y + h
+                if (intersect) {
+                    intersectCount++
+                    it.onMouseMove(MouseEvent.Move(event.position))
+                    if (hoveredId != it.id) {
+                        lastHoveredId = hoveredId
+                        hoveredId = it.id
+                    }
+                }
+            }
+            false
+        }
+        if (intersectCount == 0) {
+            lastHoveredId = -1
+            walkTree(root) {
+                if (it is MouseListener && hoveredId == it.id) {
+                    it.onMouseLeave()
+                    println("Leave #1 $it $hoveredId")
+                    hoveredId = -1
+                    return@walkTree true
+                }
+                false
+            }
+        } else {
+            walkTree(root) {
+                if (it is MouseListener && lastHoveredId == it.id) {
+                    it.onMouseLeave()
+                    println("Leave #2 $it $hoveredId")
+                    return@walkTree true
+                }
+                false
+            }
+        }
     }
 }
 
