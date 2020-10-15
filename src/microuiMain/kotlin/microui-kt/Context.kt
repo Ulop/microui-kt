@@ -46,8 +46,10 @@ class Context(
                 is UserCommand.Mouse -> {
                     when (cmd.event) {
                         is MouseEvent.Down -> {
+                            onMouseDown(cmd.event, root)
                         }
                         is MouseEvent.Up -> {
+                            onMouseUp(cmd.event, root)
                         }
                         is MouseEvent.Move -> {
                             //println(cmd.event.position)
@@ -79,6 +81,34 @@ class Context(
         return true
     }
 
+    private fun onMouseUp(event: MouseEvent.Up, root: Container) {
+        val (posX, posY) = event.position
+        walkTree(root) {
+            if (it is MouseListener) {
+                val (x, y, w, h) = it.body
+                val intersect = x <= posX && posX <= x + w && y <= posY && posY <= y + h
+                if (intersect) {
+                    it.onMouseUp(event)
+                }
+            }
+            false
+        }
+    }
+
+    private fun onMouseDown(event: MouseEvent.Down, root: Container) {
+        val (posX, posY) = event.position
+        walkTree(root) {
+            if (it is MouseListener) {
+                val (x, y, w, h) = it.body
+                val intersect = x <= posX && posX <= x + w && y <= posY && posY <= y + h
+                if (intersect) {
+                    it.onMouseDown(event)
+                }
+            }
+            false
+        }
+    }
+
     private fun onMouseMove(event: MouseEvent.Move, root: Container) {
         val (posX, posY) = event.position
         var intersectCount = 0
@@ -102,7 +132,6 @@ class Context(
             walkTree(root) {
                 if (it is MouseListener && hoveredId == it.id) {
                     it.onMouseLeave()
-                    println("Leave #1 $it $hoveredId")
                     hoveredId = -1
                     return@walkTree true
                 }
@@ -112,7 +141,6 @@ class Context(
             walkTree(root) {
                 if (it is MouseListener && lastHoveredId == it.id) {
                     it.onMouseLeave()
-                    println("Leave #2 $it $hoveredId")
                     return@walkTree true
                 }
                 false

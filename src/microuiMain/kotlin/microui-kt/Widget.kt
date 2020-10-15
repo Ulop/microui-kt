@@ -12,7 +12,7 @@ enum class MouseButton {
 
 sealed class MouseEvent(val position: Position) {
     class Down(val button: MouseButton, position: Position) : MouseEvent(position)
-    class Up(position: Position) : MouseEvent(position)
+    class Up(val button: MouseButton, position: Position) : MouseEvent(position)
     class Move(position: Position) : MouseEvent(position)
 }
 
@@ -142,7 +142,7 @@ data class WidgetState(val hovered: Boolean, val pressed: Boolean)
 interface MouseListener {
     fun onMouseEnter() {}
     fun onMouseLeave() {}
-    fun onMousePress(event: MouseEvent.Down) {}
+    fun onMouseDown(event: MouseEvent.Down) {}
     fun onMouseUp(event: MouseEvent.Up) {}
     fun onMouseMove(event: MouseEvent.Move) {}
 }
@@ -165,14 +165,34 @@ class Button(id: Int) : StatefulWidget<WidgetState>(id), MouseListener {
         state = state.copy(hovered = false)
     }
 
+    override fun onMouseDown(event: MouseEvent.Down) {
+        super.onMouseDown(event)
+        state = state.copy(pressed = true)
+        println("Down: $this")
+    }
+
+    override fun onMouseUp(event: MouseEvent.Up) {
+        super.onMouseUp(event)
+        state = state.copy(pressed = true)
+        println("Up: $this")
+    }
+
     override fun draw(context: Context) {
         context.drawRect(Rect(0, 0, getWidth(), getHeight()), Color(19U, 19U, 19U))
 
         val colorValue: UByte = if (state.hovered) 76U else 32U
-        context.drawRect(Rect(0 + 2, 0 + 2, getWidth() - 2, getHeight() - 2), Color(colorValue, colorValue, colorValue))
+        val borderWidth = if (state.pressed) 10 else 4
+        context.drawRect(
+            Rect(
+                borderWidth,
+                borderWidth,
+                getWidth() - borderWidth * 2,
+                getHeight() - borderWidth * 2
+            ), Color(colorValue, colorValue, colorValue)
+        )
     }
 
     override fun toString(): String {
-        return "Button(${this.body})"
+        return "Button(${this.body}) with state $state"
     }
 }

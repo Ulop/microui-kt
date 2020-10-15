@@ -101,6 +101,7 @@ class SDLVisualizer : Visualizer {
                                 commands.add(
                                     UserCommand.Mouse(
                                         MouseEvent.Up(
+                                            button,
                                             Position(
                                                 event.button.x,
                                                 event.button.y
