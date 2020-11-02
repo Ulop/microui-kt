@@ -97,27 +97,10 @@ class SDLVisualizer : Visualizer {
                         }
 
                         if (button != null) {
-                            if (event.type == SDL_MOUSEBUTTONUP)
-                                commands.add(
-                                    UserCommand.Mouse(
-                                        MouseEvent.Up(
-                                            button,
-                                            Position(
-                                                event.button.x,
-                                                event.button.y
-                                            )
-                                        )
-                                    )
-                                )
-                            else
-                                commands.add(
-                                    UserCommand.Mouse(
-                                        MouseEvent.Down(
-                                            button,
-                                            Position(event.button.x, event.button.y)
-                                        )
-                                    )
-                                )
+                            val constructor = if (event.type == SDL_MOUSEBUTTONUP) MouseEvent::Up else MouseEvent::Down
+                            val mouseEvent = constructor(button, Position(event.button.x, event.button.y))
+
+                            commands.add(UserCommand.Mouse(mouseEvent))
                         }
                     }
                 }

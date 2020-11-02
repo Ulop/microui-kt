@@ -44,18 +44,12 @@ class Context(
             when (cmd) {
                 UserCommand.Exit -> return false
                 is UserCommand.Mouse -> {
-                    when (cmd.event) {
-                        is MouseEvent.Down -> {
-                            onMouseDown(cmd.event, root)
-                        }
-                        is MouseEvent.Up -> {
-                            onMouseUp(cmd.event, root)
-                        }
-                        is MouseEvent.Move -> {
-                            //println(cmd.event.position)
-                            onMouseMove(cmd.event, root)
-                        }
+                    val callback: (Container) -> Unit = when (cmd.event) {
+                        is MouseEvent.Down -> { container -> onMouseDown(cmd.event, container) }
+                        is MouseEvent.Up -> { container -> onMouseUp(cmd.event, container) }
+                        is MouseEvent.Move -> { container -> onMouseMove(cmd.event, container) }
                     }
+                    callback(root)
                 }
             }
         }
